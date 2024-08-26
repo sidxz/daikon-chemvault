@@ -23,6 +23,9 @@ databases = {extras = ["postgresql"], version = "*"}
 pydantic-settings = "*"
 pytest = "*"
 httpx = "*"
+greenlet = "*"
+pytest-asyncio = "*"
+trio = "*"
 
 [dev-packages]
 
