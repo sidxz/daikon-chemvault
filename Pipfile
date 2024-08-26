@@ -5,13 +5,24 @@ name = "pypi"
 
 [packages]
 rdkit = "*"
-fastapi = {extras = ["all"], version = "*"}
+fastapi = "*"
 uvicorn = "*"
 psycopg2-binary = "*"
 asyncpg = "*"
 marshmallow = "*"
 pandas = "*"
 numpy = "*"
+loguru = "*"
+sqlalchemy = "*"
+alembic = "*"
+pydantic = "*"
+psycopg2 = "*"
+python-dotenv = "*"
+fastapi-sqlalchemy = "*"
+databases = {extras = ["postgresql"], version = "*"}
+pydantic-settings = "*"
+pytest = "*"
+httpx = "*"
 
 [dev-packages]
 

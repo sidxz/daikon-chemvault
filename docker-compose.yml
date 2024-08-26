@@ -1,0 +1,31 @@
+version: '3.9'
+
+services:
+  daikon_chem_vault_db:
+    image: postgres:15
+    restart: always
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "54320:5432"
+
+  # daikon_chem_vault_api:
+  #   build: .
+  #   command: pipenv run uvicorn app.main:app --host 0.0.0.0 --port 8000
+  #   volumes:
+  #     - .:/app
+  #   ports:
+  #     - "8000:8000"
+  #   environment:
+  #     DATABASE_URL: ${DATABASE_URL}
+  #     LOG_LEVEL: ${LOG_LEVEL}
+  #     LOG_JSON: ${LOG_JSON}
+  #   depends_on:
+  #     - daikon_chem_vault_db
+
+volumes:
+  postgres_data:
