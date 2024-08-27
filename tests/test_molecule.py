@@ -1,10 +1,12 @@
 import pytest
-from httpx import AsyncClient
+from httpx import AsyncClient, ASGITransport
 from app.main import app
 
-@pytest.mark.asyncio(scope="session")
+
+@pytest.mark.asyncio(loop_scope="session")
 async def test_create_read_update_delete_molecule():
-    async with AsyncClient(app=app, base_url="http://test") as ac:
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as ac:
         # Step 1: Create a molecule
         create_response = await ac.post(
             "/molecules/",
@@ -22,7 +24,11 @@ async def test_create_read_update_delete_molecule():
         # Step 3: Update the molecule
         update_response = await ac.put(
             f"/molecules/{molecule_id}",
-            json={"name": "Ethanol Updated", "formula": "C2H6O", "molecular_weight": "46.08"},
+            json={
+                "name": "Ethanol Updated",
+                "formula": "C2H6O",
+                "molecular_weight": "46.08",
+            },
         )
         assert update_response.status_code == 200
         assert update_response.json()["name"] == "Ethanol Updated"
