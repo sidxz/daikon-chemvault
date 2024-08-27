@@ -26,6 +26,7 @@ httpx = "*"
 greenlet = "*"
 pytest-asyncio = "*"
 trio = "*"
+pytest-ordering = "*"
 
 [dev-packages]
 

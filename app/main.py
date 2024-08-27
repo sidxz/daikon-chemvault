@@ -26,7 +26,7 @@ app = FastAPI(lifespan=lifespan)
 
 
 # Middleware to log requests
-app.middleware("http")(log_requests)
+#app.middleware("http")(log_requests)
 
 
 # Include the molecule router with a specific prefix and tag
