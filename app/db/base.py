@@ -9,7 +9,7 @@ SQLALCHEMY_DATABASE_URL = settings.DATABASE_URL
 # Create the async engine with appropriate options
 engine = create_async_engine(
     SQLALCHEMY_DATABASE_URL,
-    echo=True,  # Enable SQL query logging, useful for debugging, disable in production for better performance
+    echo=False,  # Enable SQL query logging, useful for debugging, disable in production for better performance
     future=True,  # Use the 2.0 API, ensures compatibility with SQLAlchemy 2.0 features
     pool_size=10,  # Initial connection pool size, adjust based on your application's concurrency requirements
     max_overflow=20,  # Allow additional connections beyond the pool_size in high-demand scenarios

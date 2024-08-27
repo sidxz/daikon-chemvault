@@ -37,12 +37,3 @@ logger.add(
     level="INFO",
     serialize=log_json
 )
-
-# Example log statements to demonstrate the logging configuration
-# logger.trace("Trace level initialized.")
-# logger.debug("Debug level initialized.")
-# logger.info("Info level initialized.")
-# logger.success("Success level initialized.")
-# logger.warning("Warning level initialized.")
-# logger.error("Error level initialized.")
-# logger.critical("Critical level initialized.")
