@@ -27,6 +27,9 @@ greenlet = "*"
 pytest-asyncio = "*"
 trio = "*"
 pytest-ordering = "*"
+chembl-structure-pipeline = "*"
+datamol = "*"
+deepchem = "*"
 
 [dev-packages]
 

@@ -20,7 +20,7 @@ logger.remove()
 logger.add(sys.stderr, level=log_level, serialize=log_json)
 
 # Define the project root directory and the logs directory
-project_root = Path(__file__).resolve().parent.parent
+project_root = Path(__file__).resolve().parent.parent.parent
 log_directory = project_root / "var" / "logs"
 
 # Ensure the logs directory exists, creating it if necessary
@@ -34,6 +34,6 @@ logger.add(
     log_file_path,
     rotation="10 MB",
     retention="10 days",
-    level="INFO",
+    level=log_level,
     serialize=log_json
 )

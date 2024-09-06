@@ -4,7 +4,8 @@ from app.db.models.molecule import Molecule
 from app.schemas.molecule import MoleculeCreate, MoleculeUpdate
 from app.core.logging_config import logger
 from fastapi import HTTPException
-
+from app.utils.molecules import fp_gen
+import datamol as dm
 
 # Fetch a molecule by its ID from the database
 async def get_molecule(db: AsyncSession, molecule_id: int):
@@ -22,11 +23,38 @@ async def get_molecule(db: AsyncSession, molecule_id: int):
         raise HTTPException(status_code=500, detail="Internal Server Error")
 
 
+async def get_molecule_by_smiles_canonical(db: AsyncSession, smiles_canonical: str):
+    try:
+        logger.info(f"Fetching molecule with SMILES : {smiles_canonical}")
+        result = await db.execute(
+            select(Molecule).filter(Molecule.smiles_canonical == smiles_canonical)
+        )
+        db_molecule = result.scalar()
+        if not db_molecule:
+            logger.info(f"Molecule with SMILES {smiles_canonical} not found")
+            return None
+        logger.debug(f"Molecule fetched successfully: {db_molecule}")
+        return db_molecule
+    except Exception as e:
+        logger.error(f"Error fetching molecule with SMILES {smiles_canonical}: {e}")
+        raise HTTPException(status_code=500, detail="Internal Server Error")
+
+
 # Create a new molecule and commit it to the database
 async def create_molecule(db: AsyncSession, molecule: MoleculeCreate):
     try:
         logger.info(f"Creating a new molecule with data: {molecule.model_dump()}")
         db_molecule = Molecule(**molecule.model_dump())
+        
+        # Mol
+        db_molecule.mol = db_molecule.smiles_canonical
+        # Fingerprints
+        db_molecule.morgan_fp = fp_gen.generate_morgan_fp(db_molecule.mol)
+        db_molecule.rdkit_fp = fp_gen.generate_rdkit_fp(db_molecule.mol)
+        
+        
+        logger.debug(f"Inserting molecule: {db_molecule}")
+        
         db.add(db_molecule)
         await db.commit()
         await db.refresh(db_molecule)
