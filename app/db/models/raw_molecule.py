@@ -1,8 +1,10 @@
 from sqlalchemy import Column, Integer, String
 from sqlalchemy.dialects.postgresql import UUID
 from app.db.base import Base
+from app.db.with_metadata import WithMetadata
 
-class RawMolecule(Base):
+
+class RawMolecule(Base, WithMetadata):
     __tablename__ = "raw_molecules"
 
     id = Column(Integer, primary_key=True, index=True)

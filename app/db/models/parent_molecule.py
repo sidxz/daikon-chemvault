@@ -2,7 +2,8 @@ from sqlalchemy import Column, Integer, String, Float, Boolean
 from sqlalchemy.dialects.postgresql import UUID
 from app.db.base import Base
 from sqlalchemy.types import UserDefinedType
-
+from app.db.with_metadata import WithMetadata
+from sqlalchemy.orm import relationship
 
 class MolType(UserDefinedType):
     def get_col_spec(self):
@@ -14,7 +15,7 @@ class BfpType(UserDefinedType):
         return "bfp"
 
 
-class ParentMolecule(Base):
+class ParentMolecule(Base, WithMetadata):
     __tablename__ = "parent_molecules"
 
     id = Column(
@@ -27,9 +28,7 @@ class ParentMolecule(Base):
     inchi = Column(String)
     inchi_key = Column(String)
     smarts = Column(String)
-    molblock = Column(String)
-    morgan_fp = Column(BfpType(), index=True)
-    mol = Column(MolType(), index=True)
+    
     mw = Column(Float)
     fsp3 = Column(Float)
     n_lipinski_hba = Column(Integer)
@@ -44,15 +43,22 @@ class ParentMolecule(Base):
     clogp = Column(Float)
     sas = Column(Float)
     n_aliphatic_carbocycles = Column(Integer)
-    n_aliphatic_heterocyles = Column(Integer)
+    n_aliphatic_heterocycles = Column(Integer)
     n_aliphatic_rings = Column(Integer)
     n_aromatic_carbocycles = Column(Integer)
-    n_aromatic_heterocyles = Column(Integer)
+    n_aromatic_heterocycles = Column(Integer)
     n_aromatic_rings = Column(Integer)
     n_saturated_carbocycles = Column(Integer)
-    n_saturated_heterocyles = Column(Integer)
+    n_saturated_heterocycles = Column(Integer)
     n_saturated_rings = Column(Integer)
     ro5_compliant = Column(Boolean)
+    
+    molblock = Column(String)
+    morgan_fp = Column(BfpType(), index=True)
+    rdkit_fp = Column(BfpType(), index=True)
+    mol = Column(MolType(), index=True)
 
+    # Establish a relationship to Molecule
+    children = relationship("Molecule", back_populates="parent_molecule")
     def __repr__(self):
         return f"id: {self.id}, name: {self.name}"

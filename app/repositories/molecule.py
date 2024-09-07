@@ -1,3 +1,4 @@
+from sqlalchemy import UUID
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 from app.db.models.molecule import Molecule
@@ -5,29 +6,34 @@ from app.schemas.molecule import MoleculeCreate, MoleculeUpdate
 from app.core.logging_config import logger
 from fastapi import HTTPException
 from app.utils.molecules import fp_gen
+from app.utils.molecules.helper import standardize_smiles
 import datamol as dm
 
+
+
+
 # Fetch a molecule by its ID from the database
-async def get_molecule(db: AsyncSession, molecule_id: int):
+async def get_molecule(db: AsyncSession, id: UUID):
     try:
-        logger.info(f"Fetching molecule with ID: {molecule_id}")
-        result = await db.execute(select(Molecule).filter(Molecule.id == molecule_id))
+        logger.info(f"Fetching molecule with ID: {id}")
+        result = await db.execute(select(Molecule).filter(Molecule.id == id))
         db_molecule = result.scalar()
         if not db_molecule:
-            logger.warning(f"Molecule with ID {molecule_id} not found")
+            logger.info(f"Molecule with ID {id} not found")
             return None
         logger.debug(f"Molecule fetched successfully: {db_molecule}")
         return db_molecule
     except Exception as e:
-        logger.error(f"Error fetching molecule with ID {molecule_id}: {e}")
+        logger.error(f"Error fetching molecule with ID {id}: {e}")
         raise HTTPException(status_code=500, detail="Internal Server Error")
 
-
-async def get_molecule_by_smiles_canonical(db: AsyncSession, smiles_canonical: str):
+async def get_molecule_by_smiles(db: AsyncSession, smiles_canonical: str):
     try:
         logger.info(f"Fetching molecule with SMILES : {smiles_canonical}")
+        # standardize the smiles
+        std_smiles_canonical = standardize_smiles(smiles_canonical)
         result = await db.execute(
-            select(Molecule).filter(Molecule.smiles_canonical == smiles_canonical)
+            select(Molecule).filter(Molecule.smiles_canonical == std_smiles_canonical)
         )
         db_molecule = result.scalar()
         if not db_molecule:
@@ -67,10 +73,10 @@ async def create_molecule(db: AsyncSession, molecule: MoleculeCreate):
 
 
 # Update an existing molecule by its ID
-async def update_molecule(db: AsyncSession, molecule_id: int, molecule: MoleculeUpdate):
+async def update_molecule(db: AsyncSession, id: UUID, molecule: MoleculeUpdate):
     try:
-        logger.info(f"Updating molecule with ID: {molecule_id}")
-        db_molecule = await get_molecule(db, molecule_id)
+        logger.info(f"Updating molecule with ID: {id}")
+        db_molecule = await get_molecule(db, id)
         if not db_molecule:
             raise HTTPException(status_code=404, detail="Molecule not found")
 
@@ -87,25 +93,25 @@ async def update_molecule(db: AsyncSession, molecule_id: int, molecule: Molecule
     except HTTPException as e:
         raise e  # Re-raise HTTPException without modification
     except Exception as e:
-        logger.error(f"Error updating molecule with ID {molecule_id}: {e}")
+        logger.error(f"Error updating molecule with ID {id}: {e}")
         await db.rollback()
         raise HTTPException(status_code=500, detail="Internal Server Error")
 
 
 # Delete a molecule by its ID
-async def delete_molecule(db: AsyncSession, molecule_id: int):
+async def delete_molecule(db: AsyncSession, id: UUID):
     try:
-        logger.info(f"Deleting molecule with ID: {molecule_id}")
-        db_molecule = await get_molecule(db, molecule_id)
+        logger.info(f"Deleting molecule with ID: {id}")
+        db_molecule = await get_molecule(db, id)
         if not db_molecule:
             raise HTTPException(status_code=404, detail="Molecule not found")
 
         await db.delete(db_molecule)
         await db.commit()
-        logger.debug(f"Molecule with ID {molecule_id} deleted successfully")
+        logger.info(f"Molecule with ID {id} deleted successfully")
     except HTTPException as e:
         raise e  # Re-raise HTTPException without modification
     except Exception as e:
-        logger.error(f"Error deleting molecule with ID {molecule_id}: {e}")
+        logger.error(f"Error deleting molecule with ID {id}: {e}")
         await db.rollback()
         raise HTTPException(status_code=500, detail="Internal Server Error")

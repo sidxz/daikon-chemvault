@@ -1,7 +1,9 @@
-from sqlalchemy import Column, Integer, String, Float, Boolean
+from sqlalchemy import Column, Integer, String, Float, Boolean, ForeignKey
 from sqlalchemy.dialects.postgresql import UUID
 from app.db.base import Base
 from sqlalchemy.types import UserDefinedType
+from app.db.with_metadata import WithMetadata
+from sqlalchemy.orm import relationship
 
 
 class MolType(UserDefinedType):
@@ -14,7 +16,7 @@ class BfpType(UserDefinedType):
         return "bfp"
 
 
-class Molecule(Base):
+class Molecule(Base, WithMetadata):
     __tablename__ = "molecules"
 
     id = Column(
@@ -53,10 +55,13 @@ class Molecule(Base):
     ro5_compliant = Column(Boolean)
     o_molblock = Column(String)
     std_molblock = Column(String)
-    parent_id = Column(UUID(as_uuid=True))
+    parent_id = Column(UUID(as_uuid=True), ForeignKey('parent_molecules.id'))
     morgan_fp = Column(BfpType(), index=True)
     rdkit_fp = Column(BfpType(), index=True)
     mol = Column(MolType(), index=True)
 
+    # Establish a relationship to ParentMolecule
+    parent_molecule = relationship("ParentMolecule", back_populates="children")
+    
     def __repr__(self):
         return f"id: {self.id}, name: {self.name}"
