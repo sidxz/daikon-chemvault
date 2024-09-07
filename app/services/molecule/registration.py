@@ -8,28 +8,41 @@ from app.services.molecule.standardization import standardize, standardize_paren
 from app.repositories.molecule import get_molecule_by_smiles
 from app.repositories import parent_molecule as parent_molecule_repo
 
+
 async def register(input_molecule: InputMoleculeDto, db: AsyncSession):
     """Handle standardization and creation of a molecule."""
     try:
         logger.info(f"Registering molecule: {input_molecule.model_dump()}")
-        
+
         # Step 1: Standardize the molecule
         standardized_molecule = standardize(input_molecule)
-        
-        existing_molecule = await get_molecule_by_smiles(db, standardized_molecule.smiles_canonical)
+
+        existing_molecule = await get_molecule_by_smiles(
+            db, standardized_molecule.smiles_canonical
+        )
         # Check if the molecule already exists in the database
         if existing_molecule:
             logger.info(f"Molecule already exists in the database: {existing_molecule}")
             return existing_molecule
-        logger.info(f"Will create a new molecule: {standardized_molecule.smiles_canonical}")
-        
-        # Generate new GUID
-        molecule_id = str(uuid.uuid4())
+        logger.info(
+            f"Will create a new molecule: {standardized_molecule.smiles_canonical}"
+        )
+
+        # Check if input_molecule.id is present and is a valid UUID, then use it else generate a new one
+        try:
+            molecule_id = uuid.UUID(str(input_molecule.id)) if input_molecule.id is not None else uuid.uuid4()
+        except ValueError:
+            # Handle case where provided ID is not a valid UUID
+            logger.warning("Provided ID is not a valid UUID, generating a new one.")
+            molecule_id = uuid.uuid4()
+
         standardized_molecule.id = molecule_id
-        
+
         # Check for parent molecule
-        parent_molecule = await get_parent_molecule(db, standardized_molecule.o_molblock)
-        
+        parent_molecule = await get_parent_molecule(
+            db, standardized_molecule.o_molblock
+        )
+
         if parent_molecule:
             logger.info(f"Parent molecule found: {parent_molecule.smiles_canonical}")
             standardized_molecule.parent_id = parent_molecule.id
@@ -37,18 +50,20 @@ async def register(input_molecule: InputMoleculeDto, db: AsyncSession):
             # Register parent molecule
             logger.info("Parent molecule not found. Registering parent molecule.")
             parent_molecule_id = str(uuid.uuid4())
-            standardized_parent_molecule = standardize_parent(standardized_molecule.o_molblock)
+            standardized_parent_molecule = standardize_parent(
+                standardized_molecule.o_molblock
+            )
             standardized_parent_molecule.id = parent_molecule_id
             standardized_parent_molecule.name = input_molecule.name
-            new_parent_molecule = await parent_molecule_repo.create_parent_molecule(db, standardized_parent_molecule)
+            new_parent_molecule = await parent_molecule_repo.create_parent_molecule(
+                db, standardized_parent_molecule
+            )
             standardized_molecule.parent_id = new_parent_molecule.id
-        
-        
+
         new_molecule = await molecule_repo.create_molecule(db, standardized_molecule)
-        
-      
+
         return standardized_molecule
-        
+
     except ValueError as ve:
         raise ve
     except Exception as e:

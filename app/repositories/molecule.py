@@ -8,8 +8,7 @@ from fastapi import HTTPException
 from app.utils.molecules import fp_gen
 from app.utils.molecules.helper import standardize_smiles
 import datamol as dm
-
-
+from sqlalchemy.exc import IntegrityError
 
 
 # Fetch a molecule by its ID from the database
@@ -26,6 +25,7 @@ async def get_molecule(db: AsyncSession, id: UUID):
     except Exception as e:
         logger.error(f"Error fetching molecule with ID {id}: {e}")
         raise HTTPException(status_code=500, detail="Internal Server Error")
+
 
 async def get_molecule_by_smiles(db: AsyncSession, smiles_canonical: str):
     try:
@@ -51,21 +51,28 @@ async def create_molecule(db: AsyncSession, molecule: MoleculeCreate):
     try:
         logger.info(f"Creating a new molecule with data: {molecule.model_dump()}")
         db_molecule = Molecule(**molecule.model_dump())
-        
+
         # Mol
         db_molecule.mol = db_molecule.smiles_canonical
         # Fingerprints
         db_molecule.morgan_fp = fp_gen.generate_morgan_fp(db_molecule.mol)
         db_molecule.rdkit_fp = fp_gen.generate_rdkit_fp(db_molecule.mol)
-        
-        
+
         logger.debug(f"Inserting molecule: {db_molecule}")
-        
+
         db.add(db_molecule)
         await db.commit()
         await db.refresh(db_molecule)
         logger.debug(f"Molecule created successfully: {db_molecule}")
         return db_molecule
+
+    except IntegrityError as e:
+        logger.error(f"Duplicate primary key error: {molecule.id} {e}")
+        await db.rollback()  # Rollback transaction on error
+        raise HTTPException(
+            status_code=400, detail="Molecule with this ID already exists."
+        )
+
     except Exception as e:
         logger.error(f"Error creating molecule: {e}")
         await db.rollback()  # Rollback transaction on error
