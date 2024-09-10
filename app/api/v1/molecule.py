@@ -1,3 +1,4 @@
+from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.db.base import SessionLocal
@@ -6,6 +7,7 @@ from app.schemas.molecule_dto import InputMoleculeDto
 from app.core.logging_config import logger
 from app.services.molecule import registration
 from app.schemas.molecule import MoleculeBase
+from app.repositories.molecule import get_molecule
 router = APIRouter()
 
 # Dependency to get the database session
@@ -36,21 +38,24 @@ async def create_molecule(
         raise HTTPException(status_code=500, detail="Internal Server Error")
 
 
-# @router.get("/{molecule_id}", response_model=schemas.Molecule)
-# async def read_molecule(molecule_id: int, db: AsyncSession = Depends(get_db)):
-#     try:
-#         logger.info(f"Fetching molecule with ID: {molecule_id}")
-#         db_molecule = await molecule_repo.get_molecule(db=db, molecule_id=molecule_id)
-#         if db_molecule is None:
-#             logger.warning(f"Molecule with ID {molecule_id} not found")
-#             raise HTTPException(status_code=404, detail="Molecule not found")
-#         logger.debug(f"Molecule fetched successfully: {db_molecule}")
-#         return db_molecule
-#     except HTTPException as e:
-#         raise e  # Re-raise HTTPException without modification
-#     except Exception as e:
-#         logger.error(f"Error fetching molecule with ID {molecule_id}: {e}")
-#         raise HTTPException(status_code=500, detail="Internal Server Error")
+@router.get("/by-id/{id}", response_model=MoleculeBase)
+async def read_molecule(id: UUID, db: AsyncSession = Depends(get_db)):
+    try:
+        logger.info(f"Fetching molecule with ID: {id}")
+        db_molecule = await get_molecule(db=db, id=id)
+        if db_molecule is None:
+            logger.warning(f"Molecule with ID {id} not found")
+            raise HTTPException(status_code=404, detail="Molecule not found")
+        logger.debug(f"Molecule fetched successfully: {db_molecule}")
+        return db_molecule
+    except HTTPException as e:
+        raise e
+    except ValueError as ve:
+        logger.error(f"Invalid molecule id : {ve}")
+        raise HTTPException(status_code=400, detail=f"Invalid molecule id: {ve}")
+    except Exception as e:
+        logger.error(f"Error fetching molecule with ID {id}: {e}")
+        raise HTTPException(status_code=500, detail="Internal Server Error")
 
 
 # @router.put("/{molecule_id}", response_model=schemas.Molecule)
