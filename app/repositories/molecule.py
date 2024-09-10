@@ -41,6 +41,9 @@ async def get_molecule_by_smiles(db: AsyncSession, smiles_canonical: str):
             return None
         logger.debug(f"Molecule fetched successfully: {db_molecule}")
         return db_molecule
+    except ValueError as ve:
+        logger.error(f"Invalid molecule smiles_canonical : {smiles_canonical}")
+        raise HTTPException(status_code=400, detail=f"Invalid molecule smiles: {ve}")
     except Exception as e:
         logger.error(f"Error fetching molecule with SMILES {smiles_canonical}: {e}")
         raise HTTPException(status_code=500, detail="Internal Server Error")

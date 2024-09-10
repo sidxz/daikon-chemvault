@@ -7,8 +7,10 @@ from app.schemas.molecule_dto import InputMoleculeDto
 from app.core.logging_config import logger
 from app.services.molecule import registration
 from app.schemas.molecule import MoleculeBase
-from app.repositories.molecule import get_molecule
+from app.repositories.molecule import get_molecule, get_molecule_by_smiles
+
 router = APIRouter()
+
 
 # Dependency to get the database session
 async def get_db():
@@ -25,11 +27,11 @@ async def create_molecule(
 ):
     try:
         logger.info(f"Creating a new molecule with data: {molecule.model_dump()}")
-        #result = await molecule_repo.create_molecule(db=db, molecule=molecule)
+        # result = await molecule_repo.create_molecule(db=db, molecule=molecule)
         result = await registration.register(molecule, db)
         logger.debug(f"Molecule created successfully: {result}")
         return result
-    
+
     except ValueError as ve:
         logger.error(f"Invalid molecule data: {ve}")
         raise HTTPException(status_code=400, detail=f"Invalid molecule data: {ve}")
@@ -45,7 +47,7 @@ async def read_molecule(id: UUID, db: AsyncSession = Depends(get_db)):
         db_molecule = await get_molecule(db=db, id=id)
         if db_molecule is None:
             logger.warning(f"Molecule with ID {id} not found")
-            raise HTTPException(status_code=404, detail="Molecule not found")
+            raise HTTPException(status_code=404, detail=f"Molecule not found, ID: {id}")
         logger.debug(f"Molecule fetched successfully: {db_molecule}")
         return db_molecule
     except HTTPException as e:
@@ -55,6 +57,26 @@ async def read_molecule(id: UUID, db: AsyncSession = Depends(get_db)):
         raise HTTPException(status_code=400, detail=f"Invalid molecule id: {ve}")
     except Exception as e:
         logger.error(f"Error fetching molecule with ID {id}: {e}")
+        raise HTTPException(status_code=500, detail="Internal Server Error")
+
+
+@router.get("/by-smiles-canonical/{smiles}", response_model=MoleculeBase)
+async def read_molecule(smiles: str, db: AsyncSession = Depends(get_db)):
+    try:
+        logger.info(f"Fetching molecule with canonical smiles: {smiles}")
+        db_molecule = await get_molecule_by_smiles(db=db, smiles_canonical=smiles)
+        if db_molecule is None:
+            logger.warning(f"Molecule with smiles_canonical {smiles} not found")
+            raise HTTPException(status_code=404, detail=f"Molecule not found CANONICAL SMILES: {smiles}")
+        logger.debug(f"Molecule fetched successfully: {db_molecule}")
+        return db_molecule
+    except ValueError as ve:
+        logger.error(f"Invalid molecule smiles_canonical : {smiles}")
+        raise HTTPException(status_code=400, detail=f"Invalid molecule id: {ve}")
+    except HTTPException as e:
+        raise e
+    except Exception as e:
+        logger.error(f"Error fetching molecule with smiles_canonical {smiles}: {e}")
         raise HTTPException(status_code=500, detail="Internal Server Error")
 
 
