@@ -1,13 +1,19 @@
+from typing import List
 from uuid import UUID
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.db.base import SessionLocal
 from app.repositories import molecule as molecule_repo
 from app.schemas.molecule_dto import InputMoleculeDto
 from app.core.logging_config import logger
-from app.services.molecule import registration
+from app.services.molecule import batch_registration, registration
 from app.schemas.molecule import MoleculeBase
-from app.repositories.molecule import get_molecule, get_molecule_by_smiles
+from app.repositories.molecule import (
+    get_molecule,
+    get_molecule_by_smiles,
+    search_substructure_multiple,
+)
+from app.services.molecule.similarity import find_similar_molecules
 
 router = APIRouter()
 
@@ -67,7 +73,9 @@ async def read_molecule(smiles: str, db: AsyncSession = Depends(get_db)):
         db_molecule = await get_molecule_by_smiles(db=db, smiles_canonical=smiles)
         if db_molecule is None:
             logger.warning(f"Molecule with smiles_canonical {smiles} not found")
-            raise HTTPException(status_code=404, detail=f"Molecule not found CANONICAL SMILES: {smiles}")
+            raise HTTPException(
+                status_code=404, detail=f"Molecule not found CANONICAL SMILES: {smiles}"
+            )
         logger.debug(f"Molecule fetched successfully: {db_molecule}")
         return db_molecule
     except ValueError as ve:
@@ -114,3 +122,100 @@ async def read_molecule(smiles: str, db: AsyncSession = Depends(get_db)):
 #     except Exception as e:
 #         logger.error(f"Error deleting molecule with ID {molecule_id}: {e}")
 #         raise HTTPException(status_code=500, detail="Internal Server Error")
+
+
+@router.get("/similarity/{smiles}", response_model=List[MoleculeBase])
+async def similarity_search(
+    smiles: str,
+    threshold: float = 0.7,
+    limit: int = 100,
+    db: AsyncSession = Depends(get_db),
+):
+    results = await find_similar_molecules(
+        db=db, query_molecule=smiles, threshold=threshold, limit=limit
+    )
+    return results
+
+
+@router.get("/substructure/{smiles}", response_model=List[MoleculeBase])
+async def substructure_search(
+    smiles: str, limit: int = 100, db: AsyncSession = Depends(get_db)
+):
+    try:
+        logger.info(f"Initiating substructure search for smiles: {smiles}")
+        # Call the repository function to execute the substructure search
+        results = await molecule_repo.search_substructure_molecules(
+            db=db, query_smiles=smiles, limit=limit
+        )
+
+        if not results:
+            logger.warning(f"No molecules found with substructure: {smiles}")
+        else:
+            logger.info(f"Substructure search completed with {len(results)} results")
+
+        return results
+
+    except Exception as e:
+        logger.error(f"Error performing substructure search: {e}")
+        # Raise a detailed HTTP exception with a 500 status code
+        raise HTTPException(
+            status_code=500,
+            detail="An error occurred while performing the substructure search",
+        )
+
+
+@router.get("/substructure-multiple/", response_model=List[MoleculeBase])
+async def substructure_search_all(
+    smiles_list: List[str] = Query(...),
+    condition: str = Query(...),
+    limit: int = 100,
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    API endpoint for substructure search where all substructures must be found in the molecule.
+    Accepts a list of SMILES strings and searches for molecules in the database that contain
+    all of the substructures.
+
+    Args:
+        smiles_list (List[str]): A list of SMILES strings representing the query molecules.
+        db (AsyncSession): Database session (provided by dependency injection).
+
+    Returns:
+        List[Dict[str, Any]]: A list of molecules that match all substructures.
+    """
+    try:
+        # Perform substructure search where all substructures are present
+        results = await search_substructure_multiple(
+            db=db, smiles_list=smiles_list, condition=condition, limit=limit
+        )
+
+        return results
+
+    except ValueError as ve:
+        logger.error(f"Invalid SMILES string: {ve}")
+        raise HTTPException(status_code=400, detail=str(ve))
+    except Exception as e:
+        logger.error(f"Error in substructure search: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail="An error occurred while performing the substructure search",
+        )
+
+
+# Batch
+@router.post("/batch", response_model=List[MoleculeBase])
+async def create_molecules_batch(molecules: List[InputMoleculeDto]):
+    try:
+        logger.info(f"Creating batch of {len(molecules)} molecules")
+
+        result = await batch_registration.register_molecules_batch(molecules)
+
+        logger.debug(f"Batch creation successful for {len(molecules)} molecules")
+        return result
+
+    except ValueError as ve:
+        logger.error(f"Invalid molecule data: {ve}")
+        raise HTTPException(status_code=400, detail=f"Invalid molecule data: {ve}")
+    except Exception as e:
+        logger.error(f"Error creating molecules: {e}")
+        raise HTTPException(status_code=500, detail="Internal Server Error")

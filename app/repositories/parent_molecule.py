@@ -44,7 +44,7 @@ async def get_parent_molecule(db: AsyncSession, child_molblock: str) -> ParentMo
 
 async def get_parent_molecule_by_id(db: AsyncSession, id: UUID):
     try:
-        logger.info(f"Fetching ParentMolecule with ID: {id}")
+        logger.debug(f"Fetching ParentMolecule with ID: {id}")
         result = await db.execute(
             select(ParentMolecule).filter(ParentMolecule.id == id)
         )
@@ -83,7 +83,7 @@ async def get_parent_molecule_by_smiles(db: AsyncSession, smiles_canonical: str)
 # Create a new molecule and commit it to the database
 async def create_parent_molecule(db: AsyncSession, molecule: ParentMoleculeCreate):
     try:
-        logger.info(f"Creating a new ParentMolecule with data: {molecule.model_dump()}")
+        logger.debug(f"Creating a new ParentMolecule with data: {molecule.model_dump()}")
         db_parent_molecule = ParentMolecule(**molecule.model_dump())
 
         # Mol
@@ -148,3 +148,26 @@ async def delete_parent_molecule(db: AsyncSession, id: UUID):
         logger.error(f"Error Deleting ParentMolecule  with ID {id}: {e}")
         await db.rollback()
         raise HTTPException(status_code=500, detail="Internal Server Error")
+
+
+
+
+async def bulk_create_parent_molecules(new_parent_molecules, db: AsyncSession):
+    """
+    Bulk create new parent molecules in the database.
+
+    :param new_parent_molecules: List of parent molecules to be created.
+    :param db: AsyncSession to interact with the database.
+    """
+    try:
+        db.add_all(new_parent_molecules)
+        await db.commit()
+        logger.info(
+            f"Successfully created {len(new_parent_molecules)} parent molecules."
+        )
+    except Exception as e:
+        logger.error(f"Error during bulk parent molecule creation: {e}")
+        await db.rollback()
+        raise e
+
+

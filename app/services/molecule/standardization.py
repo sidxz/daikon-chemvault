@@ -53,7 +53,7 @@ def standardize(input_molecule: InputMoleculeDto) -> MoleculeBase:
         # Check RO5 compliance
         molecule.ro5_compliant = Ro5(molecule)
 
-        logger.info(f"Standardized molecule: {molecule.model_dump()}")
+        logger.debug(f"Standardized molecule: {molecule.model_dump()}")
         return molecule
 
     except ValueError as ve:
@@ -107,7 +107,7 @@ def standardize_parent(ChildMolBlock: str) -> ParentMoleculeBase:
         # Check RO5 compliance
         parent_molecule.ro5_compliant = Ro5(parent_molecule)
         
-        logger.info(f"Standardized ParentMolecule: {parent_molecule.model_dump()}")
+        logger.debug(f"Standardized ParentMolecule: {parent_molecule.model_dump()}")
         return parent_molecule
 
     except ValueError as ve:

@@ -20,7 +20,7 @@ def generate_morgan_fp(mol: Union[str, MolType], radius: int = 3) -> str:
         raise ValueError("Molecule cannot be None.")
     
     try:
-        logger.info(f"Generating Morgan fingerprint with radius={radius}")
+        logger.debug(f"Generating Morgan fingerprint with radius={radius}")
         # Generate Morgan fingerprint with datamol
         morgan_fp = dm.to_fp(mol, as_array=False, radius=radius, includeChirality=True)
         return morgan_fp.ToBitString()
@@ -45,7 +45,7 @@ def generate_rdkit_fp(mol: Union[str, MolType]) -> str:
         raise ValueError("Molecule cannot be None.")
     
     try:
-        logger.info("Generating RDKit fingerprint")
+        logger.debug("Generating RDKit fingerprint")
         # Generate RDKit fingerprint with datamol
         rdkit_fp = dm.to_fp(mol, as_array=False, fp_type="rdkit")
         return rdkit_fp.ToBitString()
