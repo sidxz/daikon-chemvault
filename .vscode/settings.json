@@ -13,6 +13,7 @@
     "inchikey",
     "lipinski",
     "molblock",
+    "molblocks",
     "rdkit",
     "standardizer",
     "tpsa"
