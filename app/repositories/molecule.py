@@ -2,9 +2,10 @@ from sqlalchemy import UUID
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 from app.db.models.molecule import Molecule
-from app.schemas.molecule import MoleculeCreate, MoleculeUpdate
+from app.schemas.molecule import MoleculeBase, MoleculeCreate, MoleculeUpdate
 from app.core.logging_config import logger
 from fastapi import HTTPException
+from app.schemas.similar_molecule_dto import SimilarMoleculeDto
 from app.utils.molecules import fp_gen
 from app.utils.molecules.helper import standardize_smiles
 import datamol as dm
@@ -132,7 +133,7 @@ async def delete_molecule(db: AsyncSession, id: UUID):
 # Similarity search
 async def search_similar_molecules(
     db: AsyncSession, query_smiles: str, threshold: float = 0.7, limit: int = 100
-) -> List[Dict[str, Any]]:
+) -> List[SimilarMoleculeDto]:
     """
     Searches for molecules with a Tanimoto similarity score above the given threshold.
 
@@ -150,7 +151,7 @@ async def search_similar_molecules(
         # Define parameterized query to prevent SQL injection
         query = text(
             """
-            SELECT id, name, mol, morgan_fp, 
+            SELECT *, 
                    tanimoto_sml(morgan_fp, :query_fp) AS similarity
             FROM molecules
             WHERE tanimoto_sml(morgan_fp, :query_fp) >= :threshold
@@ -178,7 +179,7 @@ async def search_similar_molecules(
 # Substructure search
 async def search_substructure_molecules(
     db: AsyncSession, query_smiles: str, limit: int = 100
-) -> List[Dict[str, Any]]:
+) -> List[MoleculeBase]:
     """
     Searches for molecules containing the query molecule as a substructure.
 
@@ -201,7 +202,7 @@ async def search_substructure_molecules(
         # )
         query = text(
             """
-            SELECT id, name, mol, smiles
+            SELECT *
             FROM molecules
             WHERE mol @> :query_smiles
             LIMIT :limit;
@@ -224,7 +225,7 @@ async def search_substructure_molecules(
 
 async def search_substructure_multiple(
     db: AsyncSession, smiles_list: List[str], condition: str = "OR", limit: int = 100
-) -> List[Dict[str, Any]]:
+) -> List[MoleculeBase]:
     """
     Performs a substructure search to find molecules containing any of the provided substructures.
 
@@ -261,7 +262,7 @@ async def search_substructure_multiple(
         # Define the query using dynamic conditions
         query = text(
             f"""
-            SELECT id, name, mol, smiles
+            SELECT *
             FROM molecules
             WHERE {conditions}
             LIMIT :limit;

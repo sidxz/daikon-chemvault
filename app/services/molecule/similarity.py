@@ -4,13 +4,14 @@ from fastapi import HTTPException
 from app.core.logging_config import logger
 from typing import List, Dict, Any
 
+from app.schemas.similar_molecule_dto import SimilarMoleculeDto
 from app.utils.molecules import fp_gen
 from app.utils.molecules.helper import standardize_smiles
 
 
 async def find_similar_molecules(
     db: AsyncSession, query_molecule: str, threshold: float = 0.7, limit: int = 100
-) -> List[Dict[str, Any]]:
+) -> List[SimilarMoleculeDto]:
     """
     Fetches molecules from the database with a similarity score above the threshold.
 

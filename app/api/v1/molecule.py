@@ -1,11 +1,12 @@
 from typing import List
 from uuid import UUID
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, BackgroundTasks
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.db.base import SessionLocal
 from app.repositories import molecule as molecule_repo
 from app.schemas.molecule_dto import InputMoleculeDto
 from app.core.logging_config import logger
+from app.schemas.similar_molecule_dto import SimilarMoleculeDto
 from app.services.molecule import batch_registration, registration
 from app.schemas.molecule import MoleculeBase
 from app.repositories.molecule import (
@@ -13,6 +14,7 @@ from app.repositories.molecule import (
     get_molecule_by_smiles,
     search_substructure_multiple,
 )
+from app.services.molecule.batch_registration_parent import process_all_molecule_batches
 from app.services.molecule.similarity import find_similar_molecules
 
 router = APIRouter()
@@ -124,7 +126,7 @@ async def read_molecule(smiles: str, db: AsyncSession = Depends(get_db)):
 #         raise HTTPException(status_code=500, detail="Internal Server Error")
 
 
-@router.get("/similarity/{smiles}", response_model=List[MoleculeBase])
+@router.get("/similarity/{smiles}", response_model=List[SimilarMoleculeDto])
 async def similarity_search(
     smiles: str,
     threshold: float = 0.7,
@@ -219,3 +221,21 @@ async def create_molecules_batch(molecules: List[InputMoleculeDto]):
     except Exception as e:
         logger.error(f"Error creating molecules: {e}")
         raise HTTPException(status_code=500, detail="Internal Server Error")
+
+
+@router.post("/batch-create-parents")
+async def batch_create_parents(background_tasks: BackgroundTasks):
+    """
+    Endpoint to trigger a background job for batch processing molecules to create parents.
+    """
+    try:
+        logger.info("Received request to trigger background job for batch creating parent molecules.")
+        
+        # Add the background task to process molecule parents in batches
+        background_tasks.add_task(process_all_molecule_batches)
+        
+        return {"message": "Batch parent creation job started successfully. Check logs for progress."}
+    
+    except Exception as e:
+        logger.error(f"Error starting batch parent creation job: {e}")
+        raise HTTPException(status_code=500, detail="Failed to start batch parent creation job.")
