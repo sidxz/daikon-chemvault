@@ -66,4 +66,4 @@ class Molecule(Base, WithMetadata):
     parent_molecule = relationship("ParentMolecule", back_populates="children")
     
     def __repr__(self):
-        return f"id: {self.id}, name: {self.name}"
+        return f"id: {self.id}, name: {self.name}, synonyms: {self.synonyms}"
