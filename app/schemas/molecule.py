@@ -17,6 +17,8 @@ class MoleculeBase(BaseModel):
     std_molblock: Optional[str] = None
     parent_id: Optional[UUID4] = None
     mw: Optional[float] = Field(default=0.0)
+    iupac_name: Optional[str] = None
+    formula: Optional[str] = None
     fsp3: Optional[float] = Field(default=0.0)
     n_lipinski_hba: Optional[int] = Field(default=0)
     n_lipinski_hbd: Optional[int] = Field(default=0)
@@ -48,8 +50,12 @@ class MoleculeCreate(MoleculeBase):
 
 
 # Schema for updating an existing molecule; inherits from MoleculeBase
-class MoleculeUpdate(MoleculeBase):
-    pass
+class MoleculeUpdate(BaseModel):
+    id: UUID4 = Field(default_factory=UUID4)
+    name: Optional[str] = None
+    synonyms: Optional[str] = None
+    iupac_name: Optional[str] = None
+    
 
 
 # Schema for reading a molecule from the database, includes the ID

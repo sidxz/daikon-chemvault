@@ -1,6 +1,7 @@
 from app.schemas.molecule_dto import InputMoleculeDto
 from app.schemas.molecule import MoleculeBase
 import datamol as dm
+from rdkit.Chem import Descriptors, rdMolDescriptors, rdmolops
 from chembl_structure_pipeline import standardizer
 from app.core.logging_config import logger
 from app.schemas.parent_molecule import ParentMoleculeBase
@@ -49,7 +50,8 @@ def standardize(input_molecule: InputMoleculeDto) -> MoleculeBase:
         # Compute descriptors and update molecule
         descriptors = dm.descriptors.compute_many_descriptors(std_mol)
         molecule = molecule.model_copy(update=descriptors)
-
+        
+        molecule.formula = rdMolDescriptors.CalcMolFormula(std_mol)        
         # Check RO5 compliance
         molecule.ro5_compliant = Ro5(molecule)
 
@@ -106,6 +108,8 @@ def standardize_parent(ChildMolBlock: str) -> ParentMoleculeBase:
 
         # Check RO5 compliance
         parent_molecule.ro5_compliant = Ro5(parent_molecule)
+        
+        parent_molecule.formula = rdMolDescriptors.CalcMolFormula(mol)
         
         logger.debug(f"Standardized ParentMolecule: {parent_molecule.model_dump()}")
         return parent_molecule

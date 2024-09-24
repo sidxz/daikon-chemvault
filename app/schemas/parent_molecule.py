@@ -14,6 +14,8 @@ class ParentMoleculeBase(BaseModel):
     smarts: Optional[str] = None
     
     mw: Optional[float] = Field(default=0.0)
+    iupac_name: Optional[str] = None
+    formula: Optional[str] = None
     fsp3: Optional[float] = Field(default=0.0)
     n_lipinski_hba: Optional[int] = Field(default=0)
     n_lipinski_hbd: Optional[int] = Field(default=0)

@@ -11,6 +11,7 @@
     "httpx",
     "inchi",
     "inchikey",
+    "iupac",
     "lipinski",
     "molblock",
     "molblocks",

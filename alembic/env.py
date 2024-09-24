@@ -7,7 +7,6 @@ from alembic import context
 
 from app.db.base import Base
 from app.db.models.molecule import Molecule
-from app.db.models.raw_molecule import RawMolecule
 from app.db.models.parent_molecule import ParentMolecule
 
 import os

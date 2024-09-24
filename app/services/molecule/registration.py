@@ -2,6 +2,7 @@ import uuid
 from app.repositories import molecule as molecule_repo
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.repositories.parent_molecule import get_parent_molecule
+from app.schemas.molecule import MoleculeUpdate
 from app.schemas.molecule_dto import InputMoleculeDto
 from app.core.logging_config import logger
 from app.services.molecule.standardization import standardize, standardize_parent
@@ -23,14 +24,27 @@ async def register(input_molecule: InputMoleculeDto, db: AsyncSession):
         # Check if the molecule already exists in the database
         if existing_molecule:
             logger.info(f"Molecule already exists in the database: {existing_molecule}")
-            return existing_molecule
+            try:
+                existing_molecule = await handle_molecule_name(
+                    existing_molecule, input_molecule.name, db
+                )
+            except Exception as e:
+                logger.error(f"Error handling molecule name: {e}")
+                raise Exception("Internal error")
+            finally:
+                return existing_molecule
+
         logger.info(
             f"Will create a new molecule: {standardized_molecule.smiles_canonical}"
         )
 
         # Check if input_molecule.id is present and is a valid UUID, then use it else generate a new one
         try:
-            molecule_id = uuid.UUID(str(input_molecule.id)) if input_molecule.id is not None else uuid.uuid4()
+            molecule_id = (
+                uuid.UUID(str(input_molecule.id))
+                if input_molecule.id is not None
+                else uuid.uuid4()
+            )
         except ValueError:
             # Handle case where provided ID is not a valid UUID
             logger.warning("Provided ID is not a valid UUID, generating a new one.")
@@ -69,3 +83,34 @@ async def register(input_molecule: InputMoleculeDto, db: AsyncSession):
     except Exception as e:
         logger.error(f"Error processing molecule: {e}")
         raise Exception("Internal error")
+
+
+async def handle_molecule_name(
+    existing_molecule, input_molecule_name: str, db: AsyncSession
+):
+    """Handle molecule name and synonyms if the name doesn't match or is not in synonyms."""
+    if existing_molecule.name != input_molecule_name:
+
+        # Ensure that the synonyms are split into a list
+        existing_synonyms = (
+            existing_molecule.synonyms.split(",") if existing_molecule.synonyms else []
+        )
+
+        # Add the input molecule name to the synonyms if it is not already present
+        if input_molecule_name not in existing_synonyms:
+            logger.info(
+                f"Input name '{input_molecule_name}' not found in synonyms. Adding it."
+            )
+            existing_synonyms.append(input_molecule_name)
+            # sort the synonyms
+            existing_synonyms.sort()
+            existing_molecule.synonyms = ",".join(existing_synonyms)
+
+            # Update the molecule with the new synonyms
+            update_molecule = MoleculeUpdate(
+                id=existing_molecule.id,
+                name=existing_molecule.name,
+                synonyms=existing_molecule.synonyms
+            )
+            await molecule_repo.update_molecule(db, update_molecule.id, update_molecule)
+    return existing_molecule

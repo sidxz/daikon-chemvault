@@ -31,6 +31,9 @@ class ParentMolecule(Base, WithMetadata):
     
     mw = Column(Float)
     fsp3 = Column(Float)
+    
+    iupac_name = Column(String)
+    formula = Column(String)
     n_lipinski_hba = Column(Integer)
     n_lipinski_hbd = Column(Integer)
     n_rings = Column(Integer)

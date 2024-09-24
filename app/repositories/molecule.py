@@ -89,25 +89,31 @@ async def create_molecule(db: AsyncSession, molecule: MoleculeCreate):
 async def update_molecule(db: AsyncSession, id: UUID, molecule: MoleculeUpdate):
     try:
         logger.info(f"Updating molecule with ID: {id}")
+
+        # Fetch the molecule by its ID
         db_molecule = await get_molecule(db, id)
         if not db_molecule:
             raise HTTPException(status_code=404, detail="Molecule not found")
 
-        update_data = molecule.model_dump()
-        for key, value in update_data.items():
-            if hasattr(db_molecule, key) and value is not None:
+        # Update only the fields provided (non-None)
+        update_data = molecule.model_dump(exclude_unset=True)  # Exclude unset fields
+        if update_data:
+            for key, value in update_data.items():
                 setattr(db_molecule, key, value)
+            # Commit the updated molecule
+            await db.commit()
+            await db.refresh(db_molecule)  # Refresh the instance with the latest data
+            logger.debug(f"Molecule updated successfully: {db_molecule}")
+        else:
+            logger.info("No fields to update.")
 
-        db.add(db_molecule)
-        await db.commit()
-        await db.refresh(db_molecule)
-        logger.debug(f"Molecule updated successfully: {db_molecule}")
         return db_molecule
+
     except HTTPException as e:
         raise e  # Re-raise HTTPException without modification
     except Exception as e:
         logger.error(f"Error updating molecule with ID {id}: {e}")
-        await db.rollback()
+        await db.rollback()  # Rollback in case of error
         raise HTTPException(status_code=500, detail="Internal Server Error")
 
 
@@ -288,8 +294,6 @@ async def search_substructure_multiple(
             status_code=500,
             detail="An error occurred while performing the substructure search",
         )
-
-
 
 
 async def bulk_create_molecules(new_molecules, db: AsyncSession):

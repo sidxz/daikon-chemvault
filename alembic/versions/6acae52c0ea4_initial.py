@@ -1,18 +1,19 @@
 """initial
 
-Revision ID: 91bae30021b7
+Revision ID: 6acae52c0ea4
 Revises: 
-Create Date: 2024-09-06 23:26:56.147245
+Create Date: 2024-09-24 10:48:49.025592
 
 """
 from typing import Sequence, Union
 
 from alembic import op
 import sqlalchemy as sa
+
 import app
 
 # revision identifiers, used by Alembic.
-revision: str = '91bae30021b7'
+revision: str = '6acae52c0ea4'
 down_revision: Union[str, None] = None
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
@@ -31,6 +32,8 @@ def upgrade() -> None:
     sa.Column('smarts', sa.String(), nullable=True),
     sa.Column('mw', sa.Float(), nullable=True),
     sa.Column('fsp3', sa.Float(), nullable=True),
+    sa.Column('iupac_name', sa.String(), nullable=True),
+    sa.Column('formula', sa.String(), nullable=True),
     sa.Column('n_lipinski_hba', sa.Integer(), nullable=True),
     sa.Column('n_lipinski_hbd', sa.Integer(), nullable=True),
     sa.Column('n_rings', sa.Integer(), nullable=True),
@@ -77,29 +80,6 @@ def upgrade() -> None:
     op.create_index(op.f('ix_parent_molecules_rdkit_fp'), 'parent_molecules', ['rdkit_fp'], unique=False)
     op.create_index(op.f('ix_parent_molecules_smiles_canonical'), 'parent_molecules', ['smiles_canonical'], unique=False)
     op.create_index(op.f('ix_parent_molecules_synonyms'), 'parent_molecules', ['synonyms'], unique=False)
-    op.create_table('raw_molecules',
-    sa.Column('id', sa.Integer(), nullable=False),
-    sa.Column('registration_id', sa.UUID(), nullable=False),
-    sa.Column('name', sa.String(), nullable=True),
-    sa.Column('smiles', sa.String(), nullable=True),
-    sa.Column('reg_status', sa.String(), nullable=True),
-    sa.Column('_created_at', sa.DateTime(timezone=True), nullable=False),
-    sa.Column('_updated_at', sa.DateTime(timezone=True), nullable=False),
-    sa.Column('_deleted_at', sa.DateTime(), nullable=True),
-    sa.Column('_created_by', sa.UUID(), nullable=True),
-    sa.Column('_updated_by', sa.UUID(), nullable=True),
-    sa.Column('_deleted_by', sa.UUID(), nullable=True),
-    sa.Column('_is_deleted', sa.Boolean(), nullable=True),
-    sa.Column('_status', sa.String(), nullable=True),
-    sa.Column('_version', sa.Integer(), nullable=True),
-    sa.Column('_owner_id', sa.UUID(), nullable=True),
-    sa.Column('_tenant_id', sa.UUID(), nullable=True),
-    sa.Column('_tags', sa.String(), nullable=True),
-    sa.PrimaryKeyConstraint('id')
-    )
-    op.create_index(op.f('ix_raw_molecules_id'), 'raw_molecules', ['id'], unique=False)
-    op.create_index(op.f('ix_raw_molecules_name'), 'raw_molecules', ['name'], unique=False)
-    op.create_index(op.f('ix_raw_molecules_registration_id'), 'raw_molecules', ['registration_id'], unique=False)
     op.create_table('molecules',
     sa.Column('id', sa.UUID(), nullable=False),
     sa.Column('name', sa.String(), nullable=True),
@@ -112,6 +92,8 @@ def upgrade() -> None:
     sa.Column('smarts', sa.String(), nullable=True),
     sa.Column('mw', sa.Float(), nullable=True),
     sa.Column('fsp3', sa.Float(), nullable=True),
+    sa.Column('iupac_name', sa.String(), nullable=True),
+    sa.Column('formula', sa.String(), nullable=True),
     sa.Column('n_lipinski_hba', sa.Integer(), nullable=True),
     sa.Column('n_lipinski_hbd', sa.Integer(), nullable=True),
     sa.Column('n_rings', sa.Integer(), nullable=True),
@@ -174,10 +156,6 @@ def downgrade() -> None:
     op.drop_index(op.f('ix_molecules_mol'), table_name='molecules')
     op.drop_index(op.f('ix_molecules_id'), table_name='molecules')
     op.drop_table('molecules')
-    op.drop_index(op.f('ix_raw_molecules_registration_id'), table_name='raw_molecules')
-    op.drop_index(op.f('ix_raw_molecules_name'), table_name='raw_molecules')
-    op.drop_index(op.f('ix_raw_molecules_id'), table_name='raw_molecules')
-    op.drop_table('raw_molecules')
     op.drop_index(op.f('ix_parent_molecules_synonyms'), table_name='parent_molecules')
     op.drop_index(op.f('ix_parent_molecules_smiles_canonical'), table_name='parent_molecules')
     op.drop_index(op.f('ix_parent_molecules_rdkit_fp'), table_name='parent_molecules')
