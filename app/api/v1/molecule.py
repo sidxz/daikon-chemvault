@@ -68,7 +68,7 @@ async def read_molecule(id: UUID, db: AsyncSession = Depends(get_db)):
         raise HTTPException(status_code=500, detail="Internal Server Error")
 
 
-@router.get("/by-smiles-canonical/{smiles}", response_model=MoleculeBase)
+@router.get("/by-smiles-canonical", response_model=MoleculeBase)
 async def read_molecule(smiles: str, db: AsyncSession = Depends(get_db)):
     try:
         logger.info(f"Fetching molecule with canonical smiles: {smiles}")
@@ -126,7 +126,7 @@ async def read_molecule(smiles: str, db: AsyncSession = Depends(get_db)):
 #         raise HTTPException(status_code=500, detail="Internal Server Error")
 
 
-@router.get("/similarity/{smiles}", response_model=List[SimilarMoleculeDto])
+@router.get("/similarity", response_model=List[SimilarMoleculeDto])
 async def similarity_search(
     smiles: str,
     threshold: float = 0.7,
@@ -139,7 +139,7 @@ async def similarity_search(
     return results
 
 
-@router.get("/substructure/{smiles}", response_model=List[MoleculeBase])
+@router.get("/substructure", response_model=List[MoleculeBase])
 async def substructure_search(
     smiles: str, limit: int = 100, db: AsyncSession = Depends(get_db)
 ):
@@ -166,7 +166,7 @@ async def substructure_search(
         )
 
 
-@router.get("/substructure-multiple/", response_model=List[MoleculeBase])
+@router.get("/substructure-multiple", response_model=List[MoleculeBase])
 async def substructure_search_all(
     smiles_list: List[str] = Query(...),
     condition: str = Query(...),

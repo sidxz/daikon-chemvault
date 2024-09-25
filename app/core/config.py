@@ -8,9 +8,11 @@ class Settings(BaseSettings):
     LOG_LEVEL: str = "DEBUG"
     LOG_JSON: bool = False
 
-    # Configure model to load settings from a .env file and allow extra fields
-    model_config = ConfigDict(env_file=".env", extra="allow")
+    # Pydantic will automatically load from the environment
+    model_config = ConfigDict(extra="allow")
 
 
-# Instantiate the Settings class, which will load and validate the environment variables
+# Instantiate the Settings class
 settings = Settings()
+
+print(settings.DATABASE_URL)  # This should print the value of DATABASE_URL

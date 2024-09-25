@@ -1,0 +1,20 @@
+# Ignore Python cache and bytecode
+__pycache__/
+
+
+# Ignore version control and build tools
+.git/
+.gitignore
+.dockerignore
+docker-compose.yml
+
+
+# Ignore logs and data
+var/
+data/
+tmp/
+
+.venv/
+.pytest_cache/
+.vscode/
+.env
