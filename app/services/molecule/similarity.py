@@ -10,7 +10,11 @@ from app.utils.molecules.helper import standardize_smiles
 
 
 async def find_similar_molecules(
-    db: AsyncSession, query_molecule: str, threshold: float = 0.7, limit: int = 100
+    db: AsyncSession,
+    query_molecule: str,
+    threshold: float = 0.7,
+    limit: int = 100,
+    filters: Dict[str, Any] = None,
 ) -> List[SimilarMoleculeDto]:
     """
     Fetches molecules from the database with a similarity score above the threshold.
@@ -32,7 +36,11 @@ async def find_similar_molecules(
 
         # Call the repository function to execute the similarity search
         results = await search_similar_molecules(
-            db=db, query_smiles=standard_query_smiles, threshold=threshold, limit=limit
+            db=db,
+            query_smiles=standard_query_smiles,
+            threshold=threshold,
+            limit=limit,
+            filters=filters,
         )
 
         if not results:

@@ -1,4 +1,4 @@
-from typing import List
+from typing import List, Optional
 from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, Query, BackgroundTasks
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -131,23 +131,104 @@ async def similarity_search(
     smiles: str,
     threshold: float = 0.7,
     limit: int = 100,
+    molecular_weight_min: Optional[float] = None,
+    molecular_weight_max: Optional[float] = None,
+    clogp_min: Optional[float] = None,
+    clogp_max: Optional[float] = None,
+    lipinski_hbd_min: Optional[int] = None,
+    lipinski_hbd_max: Optional[int] = None,
+    tpsa_min: Optional[float] = None,
+    tpsa_max: Optional[float] = None,
+    rotatable_bonds_min: Optional[int] = None,
+    rotatable_bonds_max: Optional[int] = None,
+    heavy_atoms_min: Optional[int] = None,
+    heavy_atoms_max: Optional[int] = None,
+    aromatic_rings_min: Optional[int] = None,
+    aromatic_rings_max: Optional[int] = None,
+    rings_min: Optional[int] = None,
+    rings_max: Optional[int] = None,
     db: AsyncSession = Depends(get_db),
 ):
+    # Prepare a dictionary of filters with non-None values
+    filters = {
+        "molecular_weight_min": molecular_weight_min,
+        "molecular_weight_max": molecular_weight_max,
+        "clogp_min": clogp_min,
+        "clogp_max": clogp_max,
+        "lipinski_hbd_min": lipinski_hbd_min,
+        "lipinski_hbd_max": lipinski_hbd_max,
+        "tpsa_min": tpsa_min,
+        "tpsa_max": tpsa_max,
+        "rotatable_bonds_min": rotatable_bonds_min,
+        "rotatable_bonds_max": rotatable_bonds_max,
+        "heavy_atoms_min": heavy_atoms_min,
+        "heavy_atoms_max": heavy_atoms_max,
+        "aromatic_rings_min": aromatic_rings_min,
+        "aromatic_rings_max": aromatic_rings_max,
+        "rings_min": rings_min,
+        "rings_max": rings_max,
+    }
+
+    # Clean the dictionary by removing filters that are None
+    filters = {k: v for k, v in filters.items() if v is not None}
+
+    # Pass the filters dictionary to the molecule search function
     results = await find_similar_molecules(
-        db=db, query_molecule=smiles, threshold=threshold, limit=limit
+        db=db, query_molecule=smiles, threshold=threshold, limit=limit, filters=filters
     )
+
     return results
 
 
 @router.get("/substructure", response_model=List[MoleculeBase])
 async def substructure_search(
-    smiles: str, limit: int = 100, db: AsyncSession = Depends(get_db)
+    smiles: str,
+    limit: int = 100,
+    molecular_weight_min: Optional[float] = None,
+    molecular_weight_max: Optional[float] = None,
+    clogp_min: Optional[float] = None,
+    clogp_max: Optional[float] = None,
+    lipinski_hbd_min: Optional[int] = None,
+    lipinski_hbd_max: Optional[int] = None,
+    tpsa_min: Optional[float] = None,
+    tpsa_max: Optional[float] = None,
+    rotatable_bonds_min: Optional[int] = None,
+    rotatable_bonds_max: Optional[int] = None,
+    heavy_atoms_min: Optional[int] = None,
+    heavy_atoms_max: Optional[int] = None,
+    aromatic_rings_min: Optional[int] = None,
+    aromatic_rings_max: Optional[int] = None,
+    rings_min: Optional[int] = None,
+    rings_max: Optional[int] = None,
+    db: AsyncSession = Depends(get_db),
 ):
     try:
         logger.info(f"Initiating substructure search for smiles: {smiles}")
+        # Prepare a dictionary of filters with non-None values
+        filters = {
+            "molecular_weight_min": molecular_weight_min,
+            "molecular_weight_max": molecular_weight_max,
+            "clogp_min": clogp_min,
+            "clogp_max": clogp_max,
+            "lipinski_hbd_min": lipinski_hbd_min,
+            "lipinski_hbd_max": lipinski_hbd_max,
+            "tpsa_min": tpsa_min,
+            "tpsa_max": tpsa_max,
+            "rotatable_bonds_min": rotatable_bonds_min,
+            "rotatable_bonds_max": rotatable_bonds_max,
+            "heavy_atoms_min": heavy_atoms_min,
+            "heavy_atoms_max": heavy_atoms_max,
+            "aromatic_rings_min": aromatic_rings_min,
+            "aromatic_rings_max": aromatic_rings_max,
+            "rings_min": rings_min,
+            "rings_max": rings_max,
+        }
+
+        # Clean the dictionary by removing filters that are None
+        filters = {k: v for k, v in filters.items() if v is not None}
         # Call the repository function to execute the substructure search
         results = await molecule_repo.search_substructure_molecules(
-            db=db, query_smiles=smiles, limit=limit
+            db=db, query_smiles=smiles, limit=limit, filters=filters
         )
 
         if not results:
@@ -171,6 +252,22 @@ async def substructure_search_all(
     smiles_list: List[str] = Query(...),
     condition: str = Query(...),
     limit: int = 100,
+    molecular_weight_min: Optional[float] = None,
+    molecular_weight_max: Optional[float] = None,
+    clogp_min: Optional[float] = None,
+    clogp_max: Optional[float] = None,
+    lipinski_hbd_min: Optional[int] = None,
+    lipinski_hbd_max: Optional[int] = None,
+    tpsa_min: Optional[float] = None,
+    tpsa_max: Optional[float] = None,
+    rotatable_bonds_min: Optional[int] = None,
+    rotatable_bonds_max: Optional[int] = None,
+    heavy_atoms_min: Optional[int] = None,
+    heavy_atoms_max: Optional[int] = None,
+    aromatic_rings_min: Optional[int] = None,
+    aromatic_rings_max: Optional[int] = None,
+    rings_min: Optional[int] = None,
+    rings_max: Optional[int] = None,
     db: AsyncSession = Depends(get_db),
 ):
     """
@@ -187,8 +284,34 @@ async def substructure_search_all(
     """
     try:
         # Perform substructure search where all substructures are present
+        filters = {
+            "molecular_weight_min": molecular_weight_min,
+            "molecular_weight_max": molecular_weight_max,
+            "clogp_min": clogp_min,
+            "clogp_max": clogp_max,
+            "lipinski_hbd_min": lipinski_hbd_min,
+            "lipinski_hbd_max": lipinski_hbd_max,
+            "tpsa_min": tpsa_min,
+            "tpsa_max": tpsa_max,
+            "rotatable_bonds_min": rotatable_bonds_min,
+            "rotatable_bonds_max": rotatable_bonds_max,
+            "heavy_atoms_min": heavy_atoms_min,
+            "heavy_atoms_max": heavy_atoms_max,
+            "aromatic_rings_min": aromatic_rings_min,
+            "aromatic_rings_max": aromatic_rings_max,
+            "rings_min": rings_min,
+            "rings_max": rings_max,
+        }
+
+        # Clean the dictionary by removing filters that are None
+        filters = {k: v for k, v in filters.items() if v is not None}
+
         results = await search_substructure_multiple(
-            db=db, smiles_list=smiles_list, condition=condition, limit=limit
+            db=db,
+            smiles_list=smiles_list,
+            condition=condition,
+            limit=limit,
+            filters=filters,
         )
 
         return results
@@ -229,13 +352,19 @@ async def batch_create_parents(background_tasks: BackgroundTasks):
     Endpoint to trigger a background job for batch processing molecules to create parents.
     """
     try:
-        logger.info("Received request to trigger background job for batch creating parent molecules.")
-        
+        logger.info(
+            "Received request to trigger background job for batch creating parent molecules."
+        )
+
         # Add the background task to process molecule parents in batches
         background_tasks.add_task(process_all_molecule_batches)
-        
-        return {"message": "Batch parent creation job started successfully. Check logs for progress."}
-    
+
+        return {
+            "message": "Batch parent creation job started successfully. Check logs for progress."
+        }
+
     except Exception as e:
         logger.error(f"Error starting batch parent creation job: {e}")
-        raise HTTPException(status_code=500, detail="Failed to start batch parent creation job.")
+        raise HTTPException(
+            status_code=500, detail="Failed to start batch parent creation job."
+        )

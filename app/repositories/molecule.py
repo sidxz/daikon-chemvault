@@ -11,7 +11,97 @@ from app.utils.molecules.helper import standardize_smiles
 import datamol as dm
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.sql import text
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Tuple
+
+
+def generate_filter_conditions(filters: Dict[str, Any]) -> Tuple[str, Dict[str, Any]]:
+    """
+    Generates SQL filter conditions and corresponding parameters based on the filters.
+
+    Args:
+        filters (Dict[str, Any]): A dictionary containing the filter conditions.
+
+    Returns:
+        Tuple[str, Dict[str, Any]]: A tuple containing the SQL condition string and the parameters.
+    """
+    filter_conditions = []
+    filter_params = {}
+
+    if filters:
+        if "molecular_weight_min" in filters:
+            filter_conditions.append("mw >= :molecular_weight_min")
+            filter_params["molecular_weight_min"] = filters["molecular_weight_min"]
+
+        if "molecular_weight_max" in filters:
+            filter_conditions.append("mw <= :molecular_weight_max")
+            filter_params["molecular_weight_max"] = filters["molecular_weight_max"]
+
+        if "clogp_min" in filters:
+            filter_conditions.append("clogp >= :clogp_min")
+            filter_params["clogp_min"] = filters["clogp_min"]
+
+        if "clogp_max" in filters:
+            filter_conditions.append("clogp <= :clogp_max")
+            filter_params["clogp_max"] = filters["clogp_max"]
+
+        if "lipinski_hbd_min" in filters:
+            filter_conditions.append("n_lipinski_hbd >= :lipinski_hbd_min")
+            filter_params["lipinski_hbd_min"] = filters["lipinski_hbd_min"]
+
+        if "lipinski_hbd_max" in filters:
+            filter_conditions.append("n_lipinski_hbd <= :lipinski_hbd_max")
+            filter_params["lipinski_hbd_max"] = filters["lipinski_hbd_max"]
+
+        if "lipinski_hba_min" in filters:
+            filter_conditions.append("n_lipinski_hba >= :lipinski_hba_min")
+            filter_params["lipinski_hba_min"] = filters["lipinski_hba_min"]
+
+        if "lipinski_hba_max" in filters:
+            filter_conditions.append("n_lipinski_hba <= :lipinski_hba_max")
+            filter_params["lipinski_hba_max"] = filters["lipinski_hba_max"]
+
+        if "tpsa_min" in filters:
+            filter_conditions.append("tpsa >= :tpsa_min")
+            filter_params["tpsa_min"] = filters["tpsa_min"]
+
+        if "tpsa_max" in filters:
+            filter_conditions.append("tpsa <= :tpsa_max")
+            filter_params["tpsa_max"] = filters["tpsa_max"]
+
+        if "rotatable_bonds_min" in filters:
+            filter_conditions.append("n_rotatable_bonds >= :rotatable_bonds_min")
+            filter_params["rotatable_bonds_min"] = filters["rotatable_bonds_min"]
+
+        if "rotatable_bonds_max" in filters:
+            filter_conditions.append("n_rotatable_bonds <= :rotatable_bonds_max")
+            filter_params["rotatable_bonds_max"] = filters["rotatable_bonds_max"]
+
+        if "heavy_atoms_min" in filters:
+            filter_conditions.append("n_heavy_atoms >= :heavy_atoms_min")
+            filter_params["heavy_atoms_min"] = filters["heavy_atoms_min"]
+
+        if "heavy_atoms_max" in filters:
+            filter_conditions.append("n_heavy_atoms <= :heavy_atoms_max")
+            filter_params["heavy_atoms_max"] = filters["heavy_atoms_max"]
+
+        if "aromatic_rings_min" in filters:
+            filter_conditions.append("n_aromatic_rings >= :aromatic_rings_min")
+            filter_params["aromatic_rings_min"] = filters["aromatic_rings_min"]
+
+        if "aromatic_rings_max" in filters:
+            filter_conditions.append("n_aromatic_rings <= :aromatic_rings_max")
+            filter_params["aromatic_rings_max"] = filters["aromatic_rings_max"]
+
+        if "rings_min" in filters:
+            filter_conditions.append("n_rings >= :rings_min")
+            filter_params["rings_min"] = filters["rings_min"]
+
+        if "rings_max" in filters:
+            filter_conditions.append("n_rings <= :rings_max")
+            filter_params["rings_max"] = filters["rings_max"]
+
+    # Return the generated SQL condition string and the corresponding parameters
+    return " AND ".join(filter_conditions), filter_params
 
 
 # Fetch a molecule by its ID from the database
@@ -138,15 +228,21 @@ async def delete_molecule(db: AsyncSession, id: UUID):
 
 # Similarity search
 async def search_similar_molecules(
-    db: AsyncSession, query_smiles: str, threshold: float = 0.7, limit: int = 100
+    db: AsyncSession,
+    query_smiles: str,
+    threshold: float = 0.9,
+    limit: int = 100,
+    filters: Dict[str, Any] = None,
 ) -> List[SimilarMoleculeDto]:
     """
     Searches for molecules with a Tanimoto similarity score above the given threshold.
 
     Args:
         db (AsyncSession): Database session to execute the query.
-        query_fp (str): The binary string representing the query molecule's fingerprint.
-        threshold (float, optional): The similarity score threshold. Defaults to 0.7.
+        query_smiles (str): The SMILES string of the query molecule.
+        threshold (float, optional): The similarity score threshold. Defaults to 0.9.
+        limit (int, optional): Maximum number of results to return. Defaults to 100.
+        filters (Dict[str, Any], optional): Optional filters for molecular properties.
 
     Returns:
         List[Dict[str, Any]]: A list of dictionaries containing the molecule details and similarity score.
@@ -154,22 +250,41 @@ async def search_similar_molecules(
     try:
         # Convert SMILES to fingerprint
         query_fp = fp_gen.generate_morgan_fp(query_smiles)
-        # Define parameterized query to prevent SQL injection
-        query = text(
-            """
+
+        # Base SQL query
+        sql_query = """
             SELECT *, 
                    tanimoto_sml(morgan_fp, :query_fp) AS similarity
             FROM molecules
             WHERE tanimoto_sml(morgan_fp, :query_fp) >= :threshold
+        """
+
+        # Generate filter conditions and parameters
+        filter_conditions, filter_params = generate_filter_conditions(filters)
+
+        # If there are any filter conditions, append them to the base query
+        if filter_conditions:
+            sql_query += " AND " + filter_conditions
+
+        # Append the ORDER BY and LIMIT clauses
+        sql_query += """
             ORDER BY similarity DESC
             LIMIT :limit;
         """
-        )
+
+        # Create the SQLAlchemy text object
+        query = text(sql_query)
+
+        # Define the parameters, including the dynamic filters
+        parameters = {
+            "query_fp": query_fp,
+            "threshold": threshold,
+            "limit": limit,
+        }
+        parameters.update(filter_params)
 
         # Execute the query with parameters
-        result = await db.execute(
-            query, {"query_fp": query_fp, "threshold": threshold, "limit": limit}
-        )
+        result = await db.execute(query, parameters)
 
         # Fetch all results and return as a list of dictionaries
         molecules = result.mappings().all()
@@ -184,39 +299,55 @@ async def search_similar_molecules(
 
 # Substructure search
 async def search_substructure_molecules(
-    db: AsyncSession, query_smiles: str, limit: int = 100
+    db: AsyncSession,
+    query_smiles: str,
+    limit: int = 100,
+    filters: Dict[str, Any] = None,
 ) -> List[MoleculeBase]:
     """
-    Searches for molecules containing the query molecule as a substructure.
+    Searches for molecules containing the query molecule as a substructure with optional filters.
 
     Args:
         db (AsyncSession): Database session to execute the query.
-        query_fp (str): The binary string representing the query molecule's fingerprint.
+        query_smiles (str): The SMILES string of the query molecule.
+        limit (int, optional): Maximum number of results to return. Defaults to 100.
+        filters (Dict[str, Any], optional): Optional filters for molecular properties.
 
     Returns:
         List[Dict[str, Any]]: A list of dictionaries containing the molecule details.
     """
     try:
-
-        # Define parameterized query to prevent SQL injection
-        # query = text(
-        #     """
-        #     SELECT id, name, mol
-        #     FROM molecules
-        #     WHERE mol @@ :query_mol;
-        # """
-        # )
-        query = text(
-            """
+        # Base SQL query
+        sql_query = """
             SELECT *
             FROM molecules
             WHERE mol @> :query_smiles
+        """
+
+        # Generate filter conditions and parameters
+        filter_conditions, filter_params = generate_filter_conditions(filters)
+
+        # If there are any filter conditions, append them to the base query
+        if filter_conditions:
+            sql_query += " AND " + filter_conditions
+
+        # Append the LIMIT clause
+        sql_query += """
             LIMIT :limit;
         """
-        )
+
+        # Create the SQLAlchemy text object
+        query = text(sql_query)
+
+        # Define the parameters, including the dynamic filters
+        parameters = {
+            "query_smiles": query_smiles,
+            "limit": limit,
+        }
+        parameters.update(filter_params)
 
         # Execute the query with parameters
-        result = await db.execute(query, {"query_smiles": query_smiles, "limit": limit})
+        result = await db.execute(query, parameters)
 
         # Fetch all results and return as a list of dictionaries
         molecules = result.mappings().all()
@@ -230,59 +361,73 @@ async def search_substructure_molecules(
 
 
 async def search_substructure_multiple(
-    db: AsyncSession, smiles_list: List[str], condition: str = "OR", limit: int = 100
+    db: AsyncSession,
+    smiles_list: List[str],
+    condition: str = "OR",
+    limit: int = 100,
+    filters: Dict[str, Any] = None,
 ) -> List[MoleculeBase]:
     """
-    Performs a substructure search to find molecules containing any of the provided substructures.
+    Performs a substructure search to find molecules containing any of the provided substructures with optional filters.
 
     Args:
         db (AsyncSession): The database session to execute queries.
-        query_mols (List[str]): A list of MolBlock representations of the query substructures.
+        smiles_list (List[str]): A list of SMILES representations of the query substructures.
+        condition (str, optional): The logical condition to combine the substructure matches ('OR' or 'AND'). Defaults to "OR".
+        limit (int, optional): Maximum number of results to return. Defaults to 100.
+        filters (Dict[str, Any], optional): Optional filters for molecular properties.
 
     Returns:
-        List[Dict[str, Any]]: A list of dictionaries representing the molecules that match any substructure.
-
-    Raises:
-        HTTPException: If an error occurs during the substructure search.
+        List[Dict[str, Any]]: A list of dictionaries representing the molecules that match the substructures.
     """
     try:
         logger.info(
             f"Starting substructure search with {len(smiles_list)} substructures..."
         )
 
-        # Dynamically construct the WHERE clause based on the condition
+        # Ensure condition is valid
         condition = condition.upper()
-        # Check if the condition is valid
         if condition not in ["OR", "AND"]:
             raise ValueError("Invalid condition. Must be 'OR' or 'AND'.")
 
-        # Construct the conditions based on the condition
-        conditions = " OR ".join(
+        # Construct the substructure conditions dynamically
+        substructure_conditions = f" {condition} ".join(
             [f"mol @> :smiles_{i}" for i in range(len(smiles_list))]
         )
-        if condition == "AND":
-            conditions = " AND ".join(
-                [f"mol @> :smiles_{i}" for i in range(len(smiles_list))]
-            )
 
-        # Define the query using dynamic conditions
-        query = text(
-            f"""
+        # Base SQL query with substructure conditions
+        sql_query = f"""
             SELECT *
             FROM molecules
-            WHERE {conditions}
+            WHERE {substructure_conditions}
+        """
+
+        # Generate filter conditions and parameters using the helper function
+        filter_conditions, filter_params = generate_filter_conditions(filters)
+
+        # Append the filter conditions if any are present
+        if filter_conditions:
+            sql_query += " AND " + filter_conditions
+
+        # Append the LIMIT clause
+        sql_query += """
             LIMIT :limit;
         """
-        )
 
-        # Prepare the parameters with query mols
+        # Create the SQLAlchemy text object
+        query = text(sql_query)
+
+        # Prepare the parameters for the SMILES list
         params = {f"smiles_{i}": smiles for i, smiles in enumerate(smiles_list)}
         params["limit"] = limit
 
-        # Execute the query with the substructures
+        # Add filter values to the parameters dictionary
+        params.update(filter_params)
+
+        # Execute the query with the substructures and filters
         result = await db.execute(query, params)
 
-        # Fetch all results
+        # Fetch all results and return as a list of dictionaries
         molecules = result.mappings().all()
 
         logger.info(f"Found {len(molecules)} molecules matching the substructures")
