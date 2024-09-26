@@ -10,7 +10,7 @@ from app.utils.molecules import fp_gen
 from app.utils.molecules.helper import standardize_smiles
 import datamol as dm
 from sqlalchemy.exc import IntegrityError
-from sqlalchemy.sql import text
+from sqlalchemy.sql import text, or_
 from typing import List, Dict, Any, Tuple
 
 
@@ -117,6 +117,48 @@ async def get_molecule(db: AsyncSession, id: UUID):
         return db_molecule
     except Exception as e:
         logger.error(f"Error fetching molecule with ID {id}: {e}")
+        raise HTTPException(status_code=500, detail="Internal Server Error")
+
+
+# Fetch molecule by name, return similar names and if name is found in synonyms
+
+
+async def get_molecule_by_name(db: AsyncSession, name: str, limit: int = 100):
+    try:
+        logger.info(
+            f"Fetching molecules with name or matching in synonyms: {name} (limit: {limit})"
+        )
+
+        # Query to find molecules with matching name or in synonyms with limit
+        result = await db.execute(
+            select(Molecule)
+            .filter(
+                or_(
+                    Molecule.name.ilike(
+                        f"%{name}%"
+                    ),  # Case-insensitive partial match for name
+                    Molecule.synonyms.ilike(
+                        f"%{name}%"
+                    ),  # Check in synonyms field (case-insensitive)
+                )
+            )
+            .limit(limit)
+        )
+
+        # Fetch all matching molecules up to the limit
+        db_molecules = result.scalars().all()
+
+        if not db_molecules:
+            logger.info(f"No molecules found for {name}")
+            return {"message": f"No molecules found for {name}"}
+
+        logger.debug(f"Molecules fetched successfully: {db_molecules}")
+
+        # Return the list of molecules
+        return db_molecules
+
+    except Exception as e:
+        logger.error(f"Error fetching molecules with name {name}: {e}")
         raise HTTPException(status_code=500, detail="Internal Server Error")
 
 

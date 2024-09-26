@@ -11,6 +11,7 @@ from app.services.molecule import batch_registration, registration
 from app.schemas.molecule import MoleculeBase
 from app.repositories.molecule import (
     get_molecule,
+    get_molecule_by_name,
     get_molecule_by_smiles,
     search_substructure_multiple,
 )
@@ -65,6 +66,28 @@ async def read_molecule(id: UUID, db: AsyncSession = Depends(get_db)):
         raise HTTPException(status_code=400, detail=f"Invalid molecule id: {ve}")
     except Exception as e:
         logger.error(f"Error fetching molecule with ID {id}: {e}")
+        raise HTTPException(status_code=500, detail="Internal Server Error")
+
+
+@router.get("/by-name/{name}", response_model=List[MoleculeBase])
+async def read_molecule_by_name(
+    name: str, limit: int = 100, db: AsyncSession = Depends(get_db)
+):
+    try:
+        logger.info(f"Fetching molecule with Name: {name}")
+        db_molecule = await get_molecule_by_name(db=db, name=name, limit=limit)
+        if db_molecule is None:
+            logger.warning(f"Molecule with name {name} not found")
+            raise HTTPException(status_code=404, detail=f"Molecule not found, ID: {name}")
+        logger.debug(f"Molecule fetched successfully: {db_molecule}")
+        return db_molecule
+    except HTTPException as e:
+        raise e
+    except ValueError as ve:
+        logger.error(f"Invalid molecule name : {ve}")
+        raise HTTPException(status_code=400, detail=f"Invalid molecule name: {ve}")
+    except Exception as e:
+        logger.error(f"Error fetching molecule with name {name}: {e}")
         raise HTTPException(status_code=500, detail="Internal Server Error")
 
 
