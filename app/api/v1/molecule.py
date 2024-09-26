@@ -69,7 +69,7 @@ async def read_molecule(id: UUID, db: AsyncSession = Depends(get_db)):
         raise HTTPException(status_code=500, detail="Internal Server Error")
 
 
-@router.get("/by-name/{name}", response_model=List[MoleculeBase])
+@router.get("/by-name", response_model=List[MoleculeBase])
 async def read_molecule_by_name(
     name: str, limit: int = 100, db: AsyncSession = Depends(get_db)
 ):
