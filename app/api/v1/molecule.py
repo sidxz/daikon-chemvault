@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, BackgroundTasks
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.db.base import SessionLocal
 from app.repositories import molecule as molecule_repo
-from app.schemas.molecule_dto import InputMoleculeDto
+from app.schemas.molecule_dto import InputMoleculeDto, UpdateMoleculeDto
 from app.core.logging_config import logger
 from app.schemas.similar_molecule_dto import SimilarMoleculeDto
 from app.services.molecule import batch_registration, registration
@@ -112,41 +112,40 @@ async def read_molecule(smiles: str, db: AsyncSession = Depends(get_db)):
         logger.error(f"Error fetching molecule with smiles_canonical {smiles}: {e}")
         raise HTTPException(status_code=500, detail="Internal Server Error")
 
+# Update molecule can ONLY update molecule name and synonyms
+@router.put("/{id}", response_model=MoleculeBase)
+async def update_molecule(
+    id: UUID, molecule: UpdateMoleculeDto, db: AsyncSession = Depends(get_db)
+):
+    try:
+        molecule.id = id
+        logger.info(
+            f"Updating molecule with ID: {id} with data: {molecule.model_dump()}"
+        )
+        result = await molecule_repo.update_molecule(
+            db=db, id=id, molecule=molecule
+        )
+        logger.debug(f"Molecule updated successfully: {result}")
+        return result
+    except HTTPException as e:
+        raise e  # Re-raise HTTPException without modification
+    except Exception as e:
+        logger.error(f"Error updating molecule with ID {id}: {e}")
+        raise HTTPException(status_code=500, detail="Internal Server Error")
 
-# @router.put("/{molecule_id}", response_model=schemas.Molecule)
-# async def update_molecule(
-#     molecule_id: int,
-#     molecule: schemas.MoleculeUpdate,
-#     db: AsyncSession = Depends(get_db),
-# ):
-#     try:
-#         logger.info(
-#             f"Updating molecule with ID: {molecule_id} with data: {molecule.model_dump()}"
-#         )
-#         result = await molecule_repo.update_molecule(
-#             db=db, molecule_id=molecule_id, molecule=molecule
-#         )
-#         logger.debug(f"Molecule updated successfully: {result}")
-#         return result
-#     except HTTPException as e:
-#         raise e  # Re-raise HTTPException without modification
-#     except Exception as e:
-#         logger.error(f"Error updating molecule with ID {molecule_id}: {e}")
-#         raise HTTPException(status_code=500, detail="Internal Server Error")
 
-
-# @router.delete("/{molecule_id}")
-# async def delete_molecule(molecule_id: int, db: AsyncSession = Depends(get_db)):
-#     try:
-#         logger.info(f"Deleting molecule with ID: {molecule_id}")
-#         await molecule_repo.delete_molecule(db=db, molecule_id=molecule_id)
-#         logger.debug(f"Molecule with ID {molecule_id} deleted successfully")
-#         return {"detail": "Molecule deleted"}
-#     except HTTPException as e:
-#         raise e  # Re-raise HTTPException without modification
-#     except Exception as e:
-#         logger.error(f"Error deleting molecule with ID {molecule_id}: {e}")
-#         raise HTTPException(status_code=500, detail="Internal Server Error")
+@router.delete("/{id}")
+async def delete_molecule(id: UUID, db: AsyncSession = Depends(get_db)):
+    try:
+        logger.info(f"Deleting molecule with ID: {id}")
+        await molecule_repo.delete_molecule(db=db, id=id)
+        logger.debug(f"Molecule with ID {id} deleted successfully")
+        return {"detail": "Molecule deleted"}
+    except HTTPException as e:
+        raise e  # Re-raise HTTPException without modification
+    except Exception as e:
+        logger.error(f"Error deleting molecule with ID {id}: {e}")
+        raise HTTPException(status_code=500, detail="Internal Server Error")
 
 
 @router.get("/similarity", response_model=List[SimilarMoleculeDto])
