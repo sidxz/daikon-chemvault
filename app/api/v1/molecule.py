@@ -29,7 +29,6 @@ async def get_db():
         finally:
             await db.close()
 
-
 @router.post("/", response_model=MoleculeBase)
 async def create_molecule(
     molecule: InputMoleculeDto, db: AsyncSession = Depends(get_db)
