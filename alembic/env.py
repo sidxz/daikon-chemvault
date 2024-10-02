@@ -24,7 +24,7 @@ if database_url is None:
     raise ValueError("DATABASE_URL environment variable not set")
 config.set_main_option('sqlalchemy.url', database_url)
 
-print(f"DATABASE_URL: {database_url}")
+#print(f"DATABASE_URL: {database_url}")
 
 # Interpret the config file for Python logging.
 # This line sets up loggers basically.

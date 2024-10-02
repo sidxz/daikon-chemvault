@@ -13,6 +13,7 @@ RUN apt-get update && apt-get install -y \
     libpq-dev \
     libxrender1 \
     libxext6 \
+    postgresql-client \
     && rm -rf /var/lib/apt/lists/*
 
 # Install pipenv first
@@ -35,8 +36,10 @@ COPY . .
 EXPOSE 10001
 
 # Run the application
+RUN chmod +x docker-entrypoint.sh
 
-CMD ["pipenv", "run", "uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "10001"]
+ENTRYPOINT ["/project/docker-entrypoint.sh"]
+#CMD ["pipenv", "run", "uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "10001"]
 #CMD ["pipenv", "run", "/app/.venv/bin/uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "10001"]
 # Optional: Clean up cached files to reduce image size
 RUN rm -rf /root/.cache

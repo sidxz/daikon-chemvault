@@ -1,7 +1,6 @@
-from sqlalchemy import text  # Import the text function
-from app.db.base import engine  # Import the existing engine from base.py
-from app.core.logging_config import logger  # Import the configured logger
-
+from sqlalchemy import text  
+from app.db.base import engine  
+from app.core.logging_config import logger
 
 async def initialize_db():
     """
