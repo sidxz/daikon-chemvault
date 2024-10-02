@@ -120,9 +120,23 @@ async def get_molecule(db: AsyncSession, id: UUID):
         raise HTTPException(status_code=500, detail="Internal Server Error")
 
 
+# Fetch molecules by their IDs from the database
+async def get_molecules(db: AsyncSession, ids: List[UUID]):
+    try:
+        logger.info(f"Fetching molecules with IDs: {ids}")
+        result = await db.execute(select(Molecule).filter(Molecule.id.in_(ids)))
+        db_molecules = result.scalars().all()
+        if not db_molecules:
+            logger.info(f"No molecules found for IDs: {ids}")
+            return None
+        logger.debug(f"Molecules fetched successfully: {db_molecules}")
+        return db_molecules
+    except Exception as e:
+        logger.error(f"Error fetching molecules with IDs {ids}: {e}")
+        raise HTTPException(status_code=500, detail="Internal Server Error")
+
+
 # Fetch molecule by name, return similar names and if name is found in synonyms
-
-
 async def get_molecule_by_name(db: AsyncSession, name: str, limit: int = 100):
     try:
         logger.info(

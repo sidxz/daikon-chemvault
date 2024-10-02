@@ -29,6 +29,7 @@ async def get_db():
         finally:
             await db.close()
 
+
 @router.post("/", response_model=MoleculeBase)
 async def create_molecule(
     molecule: InputMoleculeDto, db: AsyncSession = Depends(get_db)
@@ -68,6 +69,28 @@ async def read_molecule(id: UUID, db: AsyncSession = Depends(get_db)):
         raise HTTPException(status_code=500, detail="Internal Server Error")
 
 
+@router.get("/by-ids", response_model=List[MoleculeBase])
+async def read_molecules(ids: List[UUID] = Query(...), db: AsyncSession = Depends(get_db)):
+    try:
+        logger.info(f"Fetching molecules with IDs: {ids}")
+        db_molecules = await molecule_repo.get_molecules(db=db, ids=ids)
+        if db_molecules is None:
+            logger.warning(f"Molecules with IDs {ids} not found")
+            raise HTTPException(
+                status_code=404, detail=f"Molecules not found, IDs: {ids}"
+            )
+        logger.debug(f"Molecules fetched successfully: {db_molecules}")
+        return db_molecules
+    except HTTPException as e:
+        raise e
+    except ValueError as ve:
+        logger.error(f"Invalid molecule ids : {ve}")
+        raise HTTPException(status_code=400, detail=f"Invalid molecule ids: {ve}")
+    except Exception as e:
+        logger.error(f"Error fetching molecules with IDs {ids}: {e}")
+        raise HTTPException(status_code=500, detail="Internal Server Error")
+
+
 @router.get("/by-name", response_model=List[MoleculeBase])
 async def read_molecule_by_name(
     name: str, limit: int = 100, db: AsyncSession = Depends(get_db)
@@ -77,7 +100,9 @@ async def read_molecule_by_name(
         db_molecule = await get_molecule_by_name(db=db, name=name, limit=limit)
         if db_molecule is None:
             logger.warning(f"Molecule with name {name} not found")
-            raise HTTPException(status_code=404, detail=f"Molecule not found, ID: {name}")
+            raise HTTPException(
+                status_code=404, detail=f"Molecule not found, ID: {name}"
+            )
         logger.debug(f"Molecule fetched successfully: {db_molecule}")
         return db_molecule
     except HTTPException as e:
@@ -111,6 +136,7 @@ async def read_molecule(smiles: str, db: AsyncSession = Depends(get_db)):
         logger.error(f"Error fetching molecule with smiles_canonical {smiles}: {e}")
         raise HTTPException(status_code=500, detail="Internal Server Error")
 
+
 # Update molecule can ONLY update molecule name and synonyms
 @router.put("/{id}", response_model=MoleculeBase)
 async def update_molecule(
@@ -121,9 +147,7 @@ async def update_molecule(
         logger.info(
             f"Updating molecule with ID: {id} with data: {molecule.model_dump()}"
         )
-        result = await molecule_repo.update_molecule(
-            db=db, id=id, molecule=molecule
-        )
+        result = await molecule_repo.update_molecule(db=db, id=id, molecule=molecule)
         logger.debug(f"Molecule updated successfully: {result}")
         return result
     except HTTPException as e:
