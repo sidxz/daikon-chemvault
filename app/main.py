@@ -1,5 +1,5 @@
 from fastapi import FastAPI, Request
-from app.api.v1 import molecule  # Import the router for molecule-related endpoints
+from app.api.v1 import molcal, molecule  # Import the router for molecule-related endpoints
 from app.core.logging_config import logger  # Import the configured logger
 from dotenv import load_dotenv
 from contextlib import asynccontextmanager
@@ -29,5 +29,7 @@ app = FastAPI(lifespan=lifespan)
 #app.middleware("http")(log_requests)
 
 
-# Include the molecule router with a specific prefix and tag
+# Include routers
 app.include_router(molecule.router, prefix="/molecules", tags=["molecules"])
+
+app.include_router(molcal.router, prefix="/molcal", tags=["molcal"])

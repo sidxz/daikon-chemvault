@@ -15,6 +15,7 @@
     "lipinski",
     "molblock",
     "molblocks",
+    "molcal",
     "rdkit",
     "standardizer",
     "tpsa"
