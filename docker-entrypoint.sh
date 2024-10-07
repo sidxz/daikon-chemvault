@@ -19,14 +19,14 @@ function log {
     echo -e "[$(date '+%Y-%m-%d %H:%M:%S')] ${color}${message}${NC}"
 }
 
-# Extract DB_HOST and DB_PORT from CHEMVAULT_DATABASE_URL
-if [ -z "$CHEMVAULT_DATABASE_URL" ]; then
-    error_exit "Error: CHEMVAULT_DATABASE_URL is not set. Please provide a valid database connection string."
+# Extract DB_HOST and DB_PORT from DATABASE_URL
+if [ -z "$DATABASE_URL" ]; then
+    error_exit "Error: DATABASE_URL is not set. Please provide a valid database connection string."
 fi
 
 # Validate and extract database host and port using regex for better security and precision
-DB_HOST=$(echo "$CHEMVAULT_DATABASE_URL" | grep -oP '(?<=@)[^:/]+' || error_exit "Error: Failed to extract DB_HOST from CHEMVAULT_DATABASE_URL")
-DB_PORT=$(echo "$CHEMVAULT_DATABASE_URL" | grep -oP '(?<=:)\d+(?=/)' || error_exit "Error: Failed to extract DB_PORT from CHEMVAULT_DATABASE_URL")
+DB_HOST=$(echo "$DATABASE_URL" | grep -oP '(?<=@)[^:/]+' || error_exit "Error: Failed to extract DB_HOST from DATABASE_URL")
+DB_PORT=$(echo "$DATABASE_URL" | grep -oP '(?<=:)\d+(?=/)' || error_exit "Error: Failed to extract DB_PORT from DATABASE_URL")
 
 # Print the database connection details (optional: remove in production to avoid leaking sensitive data)
 log "" "Database Host: $DB_HOST"

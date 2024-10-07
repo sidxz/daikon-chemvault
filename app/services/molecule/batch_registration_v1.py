@@ -25,7 +25,7 @@
 # semaphore = asyncio.Semaphore(30)
 
 # # Async engine creation
-# engine = create_async_engine(settings.CHEMVAULT_DATABASE_URL, pool_size=100, max_overflow=150)
+# engine = create_async_engine(settings.DATABASE_URL, pool_size=100, max_overflow=150)
 
 # # Session generator with proper type hint
 # async def get_db() -> AsyncGenerator[AsyncSession, None]:

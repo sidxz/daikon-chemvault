@@ -10,8 +10,8 @@ import os
 load_dotenv()
 
 # Determine logging level and format from environment variables
-log_level = os.getenv("CHEMVAULT_LOG_LEVEL", "DEBUG").upper()
-log_json = os.getenv("CHEMVAULT_LOG_JSON", "False").lower() == "true"
+log_level = os.getenv("LOG_LEVEL", "DEBUG").upper()
+log_json = os.getenv("LOG_JSON", "False").lower() == "true"
 
 # Remove the default Loguru logger configuration to apply custom settings
 logger.remove()
