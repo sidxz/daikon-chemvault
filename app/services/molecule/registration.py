@@ -104,7 +104,8 @@ async def handle_molecule_name(
             existing_synonyms.append(input_molecule_name)
             # sort the synonyms
             existing_synonyms.sort()
-            existing_molecule.synonyms = ",".join(existing_synonyms)
+            unique_synonyms = sorted(set(existing_synonyms))
+            existing_molecule.synonyms = ",".join(unique_synonyms)
 
             # Update the molecule with the new synonyms
             update_molecule = MoleculeUpdate(
