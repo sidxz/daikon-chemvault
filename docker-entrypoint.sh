@@ -43,6 +43,15 @@ done
 # Database ready message in green
 log "${GREEN}" "Database is ready!"
 
+# Connect to the database and create the RDKit extension if it does not exist
+log "" "Ensuring RDKit extension is installed..."
+if ! PGPASSWORD="$DB_PASSWORD" psql -h "$DB_HOST" -p "$DB_PORT" -U "$DB_USER" -d "$DB_NAME" -c "CREATE EXTENSION IF NOT EXISTS rdkit;"; then
+    error_exit "Error: Failed to create RDKit extension."
+fi
+
+# Success message for RDKit extension creation in green
+log "${GREEN}" "RDKit extension is installed or already exists."
+
 # Run Alembic migrations with error handling
 log "" "Running Alembic migrations..."
 if ! pipenv run alembic upgrade head; then
