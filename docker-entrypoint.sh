@@ -6,6 +6,9 @@ GREEN='\033[0;32m'
 YELLOW='\033[0;33m'
 NC='\033[0m' # No Color
 
+# Export the PostgreSQL password environment variable
+export PGPASSWORD="${POSTGRES_PASSWORD}"
+
 # Function to print error (in red) and exit on failure
 function error_exit {
     echo -e "[$(date '+%Y-%m-%d %H:%M:%S')] ${RED}$1${NC}" 1>&2
@@ -45,7 +48,7 @@ log "${GREEN}" "Database is ready!"
 
 # Connect to the database and create the RDKit extension if it does not exist
 log "" "Ensuring RDKit extension is installed..."
-if ! PGPASSWORD="$DB_PASSWORD" psql -h "$DB_HOST" -p "$DB_PORT" -U "$DB_USER" -d "$DB_NAME" -c "CREATE EXTENSION IF NOT EXISTS rdkit;"; then
+if ! psql -h "$DB_HOST" -p "$DB_PORT" -U "$POSTGRES_USER" -d "$POSTGRES_DB" -c "CREATE EXTENSION IF NOT EXISTS rdkit;"; then
     error_exit "Error: Failed to create RDKit extension."
 fi
 
