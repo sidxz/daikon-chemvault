@@ -8,9 +8,9 @@ services:
     env_file:
       - .env
     environment:
-      DATABASE_URL: ${DATABASE_URL}
-      LOG_LEVEL: ${LOG_LEVEL}
-      LOG_JSON: ${LOG_JSON}
+      CHEMVAULT_DATABASE_URL: ${CHEMVAULT_DATABASE_URL}
+      CHEMVAULT_LOG_LEVEL: ${CHEMVAULT_LOG_LEVEL}
+      CHEMVAULT_LOG_JSON: ${CHEMVAULT_LOG_JSON}
     # depends_on:
     #   - daikon_chem_vault_db
 

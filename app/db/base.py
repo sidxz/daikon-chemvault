@@ -3,8 +3,8 @@ from sqlalchemy.orm import sessionmaker, declarative_base
 
 from app.core.config import settings
 
-# Ensure the DATABASE_URL is for async usage (e.g., 'postgresql+asyncpg://user:password@localhost/dbname')
-SQLALCHEMY_DATABASE_URL = settings.DATABASE_URL
+# Ensure the CHEMVAULT_DATABASE_URL is for async usage (e.g., 'postgresql+asyncpg://user:password@localhost/dbname')
+SQLALCHEMY_DATABASE_URL = settings.CHEMVAULT_DATABASE_URL
 
 # Create the async engine with appropriate options
 engine = create_async_engine(

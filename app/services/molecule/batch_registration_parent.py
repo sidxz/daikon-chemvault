@@ -22,7 +22,7 @@ BATCH_SIZE = 1000
 load_dotenv()
 
 # Create an async engine for database operations
-engine = create_async_engine(settings.DATABASE_URL, pool_size=100, max_overflow=150)
+engine = create_async_engine(settings.CHEMVAULT_DATABASE_URL, pool_size=100, max_overflow=150)
 
 # Database session generator
 async def get_db() -> AsyncGenerator[AsyncSession, None]:
