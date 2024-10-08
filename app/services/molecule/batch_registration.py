@@ -23,6 +23,7 @@ from sqlalchemy.ext.asyncio import create_async_engine
 from app.core.config import settings
 from chembl_structure_pipeline import standardizer
 import datamol as dm
+import re
 
 semaphore = asyncio.Semaphore(30)
 
@@ -38,6 +39,43 @@ async def get_db() -> AsyncGenerator[AsyncSession, None]:
         yield session
 
 
+def validate_input_molecules(
+    input_molecules: List[InputMoleculeDto],
+) -> List[InputMoleculeDto]:
+    """
+    Validate and clean up input molecules by:
+    1. Removing newline characters and trailing spaces from the name.
+    2. Removing trailing spaces and unexpected characters from the SMILES string.
+    3. Converting the SMILES string to a molecule; if it fails, removing the entry from the list.
+    """
+    valid_molecules = []
+    # Allow common SMILES characters: alphanumerics, specific symbols, and brackets
+    allowed_chars = re.compile(r"[^A-Za-z0-9@+\-\[\]\(\)=#$%^.&*!:;]")
+
+    for molecule in input_molecules:
+        # Clean up the name
+        molecule.name = molecule.name.strip().replace("\n", "").replace("\r", "")
+
+        # Clean up the SMILES string: remove trailing spaces and unexpected characters
+        molecule.smiles = molecule.smiles.strip()
+        molecule.smiles = re.sub(allowed_chars, "", molecule.smiles)
+
+        # Try to convert SMILES to a molecule
+        rdkit_mol = dm.to_mol(molecule.smiles)
+        if rdkit_mol is None:
+            logger.warning(
+                f"Invalid SMILES after cleaning: {molecule.smiles}. Skipping molecule."
+            )
+            continue
+
+        valid_molecules.append(molecule)
+
+    logger.info(
+        f"Validated {len(valid_molecules)} molecules out of {len(input_molecules)}."
+    )
+    return valid_molecules
+
+
 async def register_molecules_batch(input_molecules: List[InputMoleculeDto]):
     """
     Register a batch of molecules after standardizing them. Avoids duplicate registrations by:
@@ -46,10 +84,17 @@ async def register_molecules_batch(input_molecules: List[InputMoleculeDto]):
     - Bulk creation of new parent molecules.
     - Bulk creation of new molecules.
     """
-    logger.info(f"Processing batch of {len(input_molecules)} molecules")
+    logger.info(f"Received batch of {len(input_molecules)} molecules")
 
+    validated_molecules = validate_input_molecules(input_molecules)
+
+    if not validated_molecules:
+        logger.warning("No valid molecules found after validation.")
+        return []
+
+    logger.info(f"Processing batch of {len(validated_molecules)} validated molecules")
     # Step 1: Parallel standardize molecules and check if they exist in the DB
-    standardized_molecules = await standardize_molecules(input_molecules)
+    standardized_molecules = await standardize_molecules(validated_molecules)
 
     # Step 2: Consolidate duplicates within the standardized molecules list
     consolidated_molecules = consolidate_duplicates(standardized_molecules)
@@ -85,27 +130,33 @@ async def standardize_molecule(input_molecule: InputMoleculeDto):
     """
     Standardize a molecule and generate fingerprints.
     """
-    standardized_molecule = standardize(input_molecule)
-    standardized_molecule_db = Molecule(**standardized_molecule.model_dump())
     try:
-        molecule_id = (
-            uuid.UUID(str(input_molecule.id))
-            if input_molecule.id is not None
-            else uuid.uuid4()
-        )
-    except ValueError:
-        logger.warning("Provided ID is not a valid UUID, generating a new one.")
-        molecule_id = uuid.uuid4()
+        standardized_molecule = standardize(input_molecule)
+        standardized_molecule_db = Molecule(**standardized_molecule.model_dump())
 
-    standardized_molecule_db.id = molecule_id
-    standardized_molecule_db.morgan_fp = fp_gen.generate_morgan_fp(
-        standardized_molecule.smiles_canonical
-    )
-    standardized_molecule_db.rdkit_fp = fp_gen.generate_rdkit_fp(
-        standardized_molecule.smiles_canonical
-    )
-    standardized_molecule_db.mol = standardized_molecule.smiles_canonical
-    return standardized_molecule_db
+        try:
+            molecule_id = (
+                uuid.UUID(str(input_molecule.id))
+                if input_molecule.id is not None
+                else uuid.uuid4()
+            )
+        except ValueError:
+            logger.warning("Provided ID is not a valid UUID, generating a new one.")
+            molecule_id = uuid.uuid4()
+
+        standardized_molecule_db.id = molecule_id
+        standardized_molecule_db.morgan_fp = fp_gen.generate_morgan_fp(
+            standardized_molecule.smiles_canonical
+        )
+        standardized_molecule_db.rdkit_fp = fp_gen.generate_rdkit_fp(
+            standardized_molecule.smiles_canonical
+        )
+        standardized_molecule_db.mol = standardized_molecule.smiles_canonical
+        return standardized_molecule_db
+
+    except Exception as e:
+        logger.error(f"Error standardizing molecule: {str(e)}. Skipping this molecule.")
+        return None
 
 
 def consolidate_duplicates(standardized_molecules: List[Molecule]) -> List[Molecule]:
@@ -152,19 +203,21 @@ async def filter_existing_molecules(
 
         if existing_molecule:
             # | is the union operator for sets
-            existing_names_set = set(existing_molecule.synonyms.split(", ")) | {existing_molecule.name}
+            existing_names_set = set(existing_molecule.synonyms.split(", ")) | {
+                existing_molecule.name
+            }
             new_names_set = set(molecule.synonyms.split(", ")) | {molecule.name}
-            
+
             # Check
             if new_names_set.issubset(existing_names_set):
                 continue
 
             existing_names_set.update(new_names_set)
             existing_names_set.discard(existing_molecule.name)
-            
+
             # Sort and update the molecule's synonyms
             existing_molecule.synonyms = ", ".join(sorted(existing_names_set))
-            
+
             updated_molecules.append(existing_molecule)
         else:
             # New molecule
