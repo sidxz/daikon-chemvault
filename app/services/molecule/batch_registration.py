@@ -203,6 +203,8 @@ async def filter_existing_molecules(
 
         if existing_molecule:
             # | is the union operator for sets
+            existing_molecule.synonyms = existing_molecule.synonyms or ""
+            molecule.synonyms = molecule.synonyms or ""
             existing_names_set = set(existing_molecule.synonyms.split(", ")) | {
                 existing_molecule.name
             }
