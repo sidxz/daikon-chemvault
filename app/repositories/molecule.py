@@ -137,39 +137,65 @@ async def get_molecules(db: AsyncSession, ids: List[UUID]):
 
 
 # Fetch molecule by name, return similar names and if name is found in synonyms
-async def get_molecule_by_name(db: AsyncSession, name: str, limit: int = 100):
+async def get_molecule_by_name(
+    db: AsyncSession, 
+    name: str, 
+    limit: int = 100, 
+    filters: Dict[str, Any] = None
+) -> List[MoleculeBase]:
+    """
+    Fetch molecules by name or synonyms with optional filters.
+
+    Args:
+        db (AsyncSession): Database session.
+        name (str): Name to search for.
+        limit (int): Maximum number of results to return.
+        filters (Dict[str, Any], optional): Optional filters for molecular properties.
+
+    Returns:
+        List[MoleculeBase]: A list of molecules matching the search criteria.
+    """
     try:
-        logger.info(
-            f"Fetching molecules with name or matching in synonyms: {name} (limit: {limit})"
-        )
+        logger.info(f"Fetching molecules with name or synonyms matching: {name}")
 
-        # Query to find molecules with matching name or in synonyms with limit
-        result = await db.execute(
-            select(Molecule)
-            .filter(
-                or_(
-                    Molecule.name.ilike(
-                        f"%{name}%"
-                    ),  # Case-insensitive partial match for name
-                    Molecule.synonyms.ilike(
-                        f"%{name}%"
-                    ),  # Check in synonyms field (case-insensitive)
-                )
-            )
-            .limit(limit)
-        )
+        # Base SQL query for searching by name or synonyms
+        sql_query = """
+            SELECT * 
+            FROM molecules 
+            WHERE (name ILIKE :name OR synonyms ILIKE :name)
+        """
 
-        # Fetch all matching molecules up to the limit
-        db_molecules = result.scalars().all()
+        # Generate filter conditions and parameters
+        filter_conditions, filter_params = generate_filter_conditions(filters)
 
-        if not db_molecules:
-            logger.info(f"No molecules found for {name}")
-            return {"message": f"No molecules found for {name}"}
+        # If there are any filter conditions, append them to the base query
+        if filter_conditions:
+            sql_query += " AND " + filter_conditions
 
-        logger.debug(f"Molecules fetched successfully: {db_molecules}")
+        # Append the ORDER BY and LIMIT clauses
+        sql_query += """
+            ORDER BY name ASC
+            LIMIT :limit;
+        """
 
-        # Return the list of molecules
-        return db_molecules
+        # Create the SQLAlchemy text object
+        query = text(sql_query)
+
+        # Define the parameters, including the dynamic filters
+        parameters = {
+            "name": f"%{name}%",
+            "limit": limit,
+        }
+        parameters.update(filter_params)
+
+        # Execute the query with parameters
+        result = await db.execute(query, parameters)
+
+        # Fetch all results and return as a list
+        molecules = result.mappings().all()
+
+        logger.info(f"Found {len(molecules)} molecules with name matching '{name}'")
+        return molecules
 
     except Exception as e:
         logger.error(f"Error fetching molecules with name {name}: {e}")
