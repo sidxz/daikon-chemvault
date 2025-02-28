@@ -8,7 +8,7 @@ from app.schemas.molecule_dto import InputMoleculeDto, UpdateMoleculeDto
 from app.core.logging_config import logger
 from app.schemas.similar_molecule_dto import SimilarMoleculeDto
 from app.services.molecule import batch_registration, registration
-from app.schemas.molecule import MoleculeBase
+from app.schemas.molecule import MoleculeBase, MoleculeRead
 from app.repositories.molecule import (
     get_molecule,
     get_molecule_by_name,
@@ -48,7 +48,7 @@ async def create_molecule(
         raise HTTPException(status_code=500, detail="Internal Server Error")
 
 
-@router.get("/by-id/{id}", response_model=MoleculeBase)
+@router.get("/by-id/{id}", response_model=MoleculeRead)
 async def read_molecule(id: UUID, db: AsyncSession = Depends(get_db)):
     try:
         logger.info(f"Fetching molecule with ID: {id}")
@@ -68,7 +68,7 @@ async def read_molecule(id: UUID, db: AsyncSession = Depends(get_db)):
         raise HTTPException(status_code=500, detail="Internal Server Error")
 
 
-@router.get("/by-ids", response_model=List[MoleculeBase])
+@router.get("/by-ids", response_model=List[MoleculeRead])
 async def read_molecules(
     ids: List[UUID] = Query(...), db: AsyncSession = Depends(get_db)
 ):

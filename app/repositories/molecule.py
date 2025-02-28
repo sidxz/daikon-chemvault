@@ -2,7 +2,7 @@ from sqlalchemy import UUID
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 from app.db.models.molecule import Molecule
-from app.schemas.molecule import MoleculeBase, MoleculeCreate, MoleculeUpdate
+from app.schemas.molecule import MoleculeBase, MoleculeCreate, MoleculeRead, MoleculeUpdate
 from app.core.logging_config import logger
 from fastapi import HTTPException
 from app.schemas.similar_molecule_dto import SimilarMoleculeDto
@@ -12,6 +12,7 @@ import datamol as dm
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.sql import text, or_
 from typing import List, Dict, Any, Tuple
+from sqlalchemy.orm import selectinload
 
 
 def generate_filter_conditions(filters: Dict[str, Any]) -> Tuple[str, Dict[str, Any]]:
@@ -108,7 +109,11 @@ def generate_filter_conditions(filters: Dict[str, Any]) -> Tuple[str, Dict[str, 
 async def get_molecule(db: AsyncSession, id: UUID):
     try:
         logger.info(f"Fetching molecule with ID: {id}")
-        result = await db.execute(select(Molecule).filter(Molecule.id == id))
+        result = await db.execute(
+        select(Molecule)
+        .options(selectinload(Molecule.pains))  # Ensure related data is preloaded
+        .filter(Molecule.id == id)
+    )
         db_molecule = result.scalar()
         if not db_molecule:
             logger.info(f"Molecule with ID {id} not found")
@@ -124,7 +129,11 @@ async def get_molecule(db: AsyncSession, id: UUID):
 async def get_molecules(db: AsyncSession, ids: List[UUID]):
     try:
         logger.info(f"Fetching molecules with IDs: {ids}")
-        result = await db.execute(select(Molecule).filter(Molecule.id.in_(ids)))
+        result = await db.execute(
+            select(Molecule)
+            .options(selectinload(Molecule.pains))  # Ensure PAINS data is preloaded
+            .filter(Molecule.id.in_(ids))
+        )
         db_molecules = result.scalars().all()
         if not db_molecules:
             logger.info(f"No molecules found for IDs: {ids}")
@@ -133,6 +142,20 @@ async def get_molecules(db: AsyncSession, ids: List[UUID]):
         return db_molecules
     except Exception as e:
         logger.error(f"Error fetching molecules with IDs {ids}: {e}")
+        raise HTTPException(status_code=500, detail="Internal Server Error")
+
+# Fetch all molecules from the database
+async def get_all_molecules(db: AsyncSession):
+    try:
+        logger.info("Fetching all molecules from the database")
+        result = await db.execute(
+            select(Molecule)
+        )
+        db_molecules = result.scalars().all()
+        logger.debug(f"Fetched {len(db_molecules)} molecules")
+        return db_molecules
+    except Exception as e:
+        logger.error(f"Error fetching all molecules: {e}")
         raise HTTPException(status_code=500, detail="Internal Server Error")
 
 

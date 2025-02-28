@@ -15,6 +15,8 @@ from app.repositories.parent_molecule import (
     get_parent_molecule,
 )
 from app.schemas.molecule_dto import InputMoleculeDto
+from app.schemas.pains import PainsCreate
+from app.services.molcal.rd_pains import detect_pains
 from app.services.molecule.standardization import standardize, standardize_parent
 from app.utils.molecules import fp_gen
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -24,6 +26,7 @@ from app.core.config import settings
 from chembl_structure_pipeline import standardizer
 import datamol as dm
 import re
+from app.repositories import pains as pains_repo
 
 semaphore = asyncio.Semaphore(30)
 
@@ -107,6 +110,7 @@ async def register_molecules_batch(input_molecules: List[InputMoleculeDto]):
     # Step 4: Insert new molecules and update existing molecules
     if molecules_to_register:
         await bulk_insert_molecules(molecules_to_register)
+        await perform_pains_detection(molecules_to_register)
 
     if molecules_to_update:
         await bulk_update_molecules(molecules_to_update)
@@ -117,6 +121,34 @@ async def register_molecules_batch(input_molecules: List[InputMoleculeDto]):
     # Return combined array of updated and new molecules
     return molecules_to_register + molecules_to_update
 
+
+async def perform_pains_detection(molecules: List[Molecule]):
+    """
+    Perform PAINS detection on newly registered molecules and save the results.
+    """
+    if not molecules:
+        return
+
+    logger.info(f"Performing PAINS detection for {len(molecules)} molecules.")
+
+    try:
+        pains_results = detect_pains(molecules)  # Detect PAINS in batch
+
+        if pains_results:
+            pains_entries = [
+                PainsCreate(
+                    id=molecule.id,
+                    rdkit_pains=result.rdkit_pains,
+                    rdkit_pains_label=result.rdkit_pains_label,
+                )
+                for molecule, result in zip(molecules, pains_results)
+            ]
+
+            await pains_repo.bulk_create_pains(db=next(get_db()), pains_list=pains_entries)
+            logger.info(f"PAINS detection completed for {len(pains_entries)} molecules.")
+
+    except Exception as e:
+        logger.error(f"Error during PAINS detection: {e}")
 
 # Step 1: Standardize molecules (without checking the DB yet)
 async def standardize_molecules(input_molecules: List[InputMoleculeDto]):

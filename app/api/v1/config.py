@@ -20,4 +20,4 @@ async def get_db():
 
 @router.get("/version")
 async def version():
-    return {"version": "1.1.0"}
+    return {"version": "1.2.0"}
