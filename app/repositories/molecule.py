@@ -223,6 +223,23 @@ async def get_molecule_by_name(
     except Exception as e:
         logger.error(f"Error fetching molecules with name {name}: {e}")
         raise HTTPException(status_code=500, detail="Internal Server Error")
+    
+    
+async def get_molecule_by_name_exact(db: AsyncSession, name: str):
+    try:
+        logger.info(f"Fetching molecule with name: {name}")
+        result = await db.execute(
+            select(Molecule).filter(or_(Molecule.name == name, Molecule.synonyms == name))
+        )
+        db_molecule = result.scalar()
+        if not db_molecule:
+            logger.info(f"Molecule with name {name} not found")
+            return None
+        logger.debug(f"Molecule fetched successfully: {db_molecule}")
+        return db_molecule
+    except Exception as e:
+        logger.error(f"Error fetching molecule with name {name}: {e}")
+        raise HTTPException(status_code=500, detail="Internal Server Error")
 
 
 async def get_molecule_by_smiles(db: AsyncSession, smiles_canonical: str):

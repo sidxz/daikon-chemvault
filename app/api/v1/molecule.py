@@ -12,6 +12,7 @@ from app.schemas.molecule import MoleculeBase, MoleculeRead
 from app.repositories.molecule import (
     get_molecule,
     get_molecule_by_name,
+    get_molecule_by_name_exact,
     get_molecule_by_smiles,
     search_substructure_multiple,
 )
@@ -162,6 +163,26 @@ async def read_molecule_by_name(
         logger.error(f"Error fetching molecule with name {name}: {e}")
         raise HTTPException(status_code=500, detail="Internal Server Error")
 
+@router.get("/by-name-exact", response_model=MoleculeBase)
+async def read_molecule_by_name_exact(name: str, db: AsyncSession = Depends(get_db)):
+    try:
+        logger.info(f"Fetching molecule with Name: {name}")
+        db_molecule = await get_molecule_by_name_exact(db=db, name=name)
+        if db_molecule is None:
+            logger.warning(f"Molecule with name {name} not found")
+            raise HTTPException(
+                status_code=404, detail=f"Molecule not found, Name: {name}"
+            )
+        logger.debug(f"Molecule fetched successfully: {db_molecule}")
+        return db_molecule
+    except ValueError as ve:
+        logger.error(f"Invalid molecule name : {ve}")
+        raise HTTPException(status_code=400, detail=f"Invalid molecule name: {ve}")
+    except HTTPException as e:
+        raise e
+    except Exception as e:
+        logger.error(f"Error fetching molecule with name {name}: {e}")
+        raise HTTPException(status_code=500, detail="Internal Server Error")
 
 @router.get("/by-smiles-canonical", response_model=MoleculeBase)
 async def read_molecule(smiles: str, db: AsyncSession = Depends(get_db)):
