@@ -91,7 +91,7 @@ async def register_molecules_batch(input_molecules: List[InputMoleculeDto]):
         try:
             standardized_molecules = await standardize_molecules(validated_molecules)
             consolidated_molecules = consolidate_duplicates(standardized_molecules)
-            molecules_to_update, molecules_to_register = (
+            molecules_to_update, molecules_to_register, not_changed_molecules = (
                 await filter_existing_molecules(consolidated_molecules, db)
             )
 
@@ -106,7 +106,7 @@ async def register_molecules_batch(input_molecules: List[InputMoleculeDto]):
                 f"Successfully registered {len(molecules_to_register)} molecules, "
                 f"updated {len(molecules_to_update)} molecules."
             )
-            return molecules_to_register + molecules_to_update
+            return molecules_to_register + molecules_to_update + not_changed_molecules
 
         except Exception as e:
             logger.error(f"Unexpected error in molecule registration: {e}")
@@ -220,6 +220,7 @@ async def filter_existing_molecules(
 
     updated_molecules = []
     new_molecules = []
+    not_changed_molecules = []
 
     for molecule in standardized_molecules:
         existing_molecule = existing_molecules.get(molecule.smiles_canonical)
@@ -233,6 +234,7 @@ async def filter_existing_molecules(
             new_names_set = set(molecule.synonyms.split(", ")) | {molecule.name}
 
             if new_names_set.issubset(existing_names_set):
+                not_changed_molecules.append(existing_molecule)
                 continue
 
             existing_names_set.update(new_names_set)
@@ -242,7 +244,7 @@ async def filter_existing_molecules(
         else:
             new_molecules.append(molecule)
 
-    return updated_molecules, new_molecules
+    return updated_molecules, new_molecules, not_changed_molecules
 
 
 # Perform a bulk query to find which SMILES already exist in the database
