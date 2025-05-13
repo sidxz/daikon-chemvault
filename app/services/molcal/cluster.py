@@ -27,6 +27,8 @@ def cluster_molecules_with_centroids(
     canonical_smiles_dict = {}
     mols = []
     id_order = []
+    
+    logger.info(f"Starting clustering with {len(molecule_list)} molecules with cutoff {cutoff}.")
 
     # Convert SMILES to canonical SMILES and RDKit Mol objects
     for mol_data in molecule_list:

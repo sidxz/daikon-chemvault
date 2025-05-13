@@ -22,24 +22,28 @@ async def get_db():
 
 @router.post("/cluster", response_model=List[ClusterOutputDto])
 async def cluster_molecules(
-    molecules: List[ClusterInputDto], db: AsyncSession = Depends(get_db)
+    molecules: List[ClusterInputDto],
+    cutoff: float = 0.7,
+    db: AsyncSession = Depends(get_db),
 ):
     try:
         logger.info(f"Clustering request received with {len(molecules)} molecules.")
-        
+
         # Start time for measuring the clustering duration
         start_time = time.time()
-        
+
         # Perform the clustering
-        result = cluster_molecules_with_centroids(molecules)
-        
+        result = cluster_molecules_with_centroids(
+            molecule_list=molecules, cutoff=cutoff
+        )
+
         # End time after clustering
         end_time = time.time()
-        
+
         # Calculate the time taken for clustering
         duration = end_time - start_time
         logger.info(f"Clustering completed in {duration:.4f} seconds.")
-        
+
         return result
 
     except ValueError as ve:
@@ -47,27 +51,31 @@ async def cluster_molecules(
     except Exception as e:
         raise HTTPException(status_code=500, detail="Internal Server Error")
 
+
 @router.post("/pains", response_model=List[PainsOutputDto])
 async def detect_pains(
     molecules: List[ClusterInputDto], db: AsyncSession = Depends(get_db)
 ):
     try:
-        logger.info(f"PAINS detection request received with {len(molecules)} molecules.")
-        
+        logger.info(
+            f"PAINS detection request received with {len(molecules)} molecules."
+        )
+
         # Start time for measuring the PAINS detection duration
         start_time = time.time()
-        
+
         # Perform the PAINS detection
         from app.services.molcal.rd_pains import detect_pains
+
         result = detect_pains(molecules)
-        
+
         # End time after PAINS detection
         end_time = time.time()
-        
+
         # Calculate the time taken for PAINS detection
         duration = end_time - start_time
         logger.info(f"PAINS detection completed in {duration:.4f} seconds.")
-        
+
         return result
 
     except ValueError as ve:
