@@ -8,10 +8,11 @@ from app.schemas.molecule_dto import InputMoleculeDto, UpdateMoleculeDto
 from app.core.logging_config import logger
 from app.schemas.similar_molecule_dto import SimilarMoleculeDto
 from app.services.molecule import batch_registration, registration
-from app.schemas.molecule import MoleculeBase
+from app.schemas.molecule import MoleculeBase, MoleculeRead
 from app.repositories.molecule import (
     get_molecule,
     get_molecule_by_name,
+    get_molecule_by_name_exact,
     get_molecule_by_smiles,
     search_substructure_multiple,
 )
@@ -28,7 +29,6 @@ async def get_db():
             yield db
         finally:
             await db.close()
-
 
 @router.post("/", response_model=MoleculeBase)
 async def create_molecule(
@@ -49,7 +49,7 @@ async def create_molecule(
         raise HTTPException(status_code=500, detail="Internal Server Error")
 
 
-@router.get("/by-id/{id}", response_model=MoleculeBase)
+@router.get("/by-id/{id}", response_model=MoleculeRead)
 async def read_molecule(id: UUID, db: AsyncSession = Depends(get_db)):
     try:
         logger.info(f"Fetching molecule with ID: {id}")
@@ -69,8 +69,10 @@ async def read_molecule(id: UUID, db: AsyncSession = Depends(get_db)):
         raise HTTPException(status_code=500, detail="Internal Server Error")
 
 
-@router.get("/by-ids", response_model=List[MoleculeBase])
-async def read_molecules(ids: List[UUID] = Query(...), db: AsyncSession = Depends(get_db)):
+@router.get("/by-ids", response_model=List[MoleculeRead])
+async def read_molecules(
+    ids: List[UUID] = Query(...), db: AsyncSession = Depends(get_db)
+):
     try:
         logger.info(f"Fetching molecules with IDs: {ids}")
         db_molecules = await molecule_repo.get_molecules(db=db, ids=ids)
@@ -93,16 +95,63 @@ async def read_molecules(ids: List[UUID] = Query(...), db: AsyncSession = Depend
 
 @router.get("/by-name", response_model=List[MoleculeBase])
 async def read_molecule_by_name(
-    name: str, limit: int = 100, db: AsyncSession = Depends(get_db)
+    name: str,
+    limit: int = 100,
+    molecular_weight_min: Optional[float] = None,
+    molecular_weight_max: Optional[float] = None,
+    clogp_min: Optional[float] = None,
+    clogp_max: Optional[float] = None,
+    lipinski_hbd_min: Optional[int] = None,
+    lipinski_hbd_max: Optional[int] = None,
+    tpsa_min: Optional[float] = None,
+    tpsa_max: Optional[float] = None,
+    rotatable_bonds_min: Optional[int] = None,
+    rotatable_bonds_max: Optional[int] = None,
+    heavy_atoms_min: Optional[int] = None,
+    heavy_atoms_max: Optional[int] = None,
+    aromatic_rings_min: Optional[int] = None,
+    aromatic_rings_max: Optional[int] = None,
+    rings_min: Optional[int] = None,
+    rings_max: Optional[int] = None,
+    db: AsyncSession = Depends(get_db),
 ):
     try:
         logger.info(f"Fetching molecule with Name: {name}")
-        db_molecule = await get_molecule_by_name(db=db, name=name, limit=limit)
-        if db_molecule is None:
+
+        # Prepare a dictionary of filters with non-None values
+        filters = {
+            "molecular_weight_min": molecular_weight_min,
+            "molecular_weight_max": molecular_weight_max,
+            "clogp_min": clogp_min,
+            "clogp_max": clogp_max,
+            "lipinski_hbd_min": lipinski_hbd_min,
+            "lipinski_hbd_max": lipinski_hbd_max,
+            "tpsa_min": tpsa_min,
+            "tpsa_max": tpsa_max,
+            "rotatable_bonds_min": rotatable_bonds_min,
+            "rotatable_bonds_max": rotatable_bonds_max,
+            "heavy_atoms_min": heavy_atoms_min,
+            "heavy_atoms_max": heavy_atoms_max,
+            "aromatic_rings_min": aromatic_rings_min,
+            "aromatic_rings_max": aromatic_rings_max,
+            "rings_min": rings_min,
+            "rings_max": rings_max,
+        }
+
+        # Clean the dictionary by removing filters that are None
+        filters = {k: v for k, v in filters.items() if v is not None}
+
+        # Fetch molecules by name with the given filters
+        db_molecule = await get_molecule_by_name(
+            db=db, name=name, limit=limit, filters=filters
+        )
+
+        if not db_molecule:
             logger.warning(f"Molecule with name {name} not found")
             raise HTTPException(
-                status_code=404, detail=f"Molecule not found, ID: {name}"
+                status_code=404, detail=f"Molecule not found, Name: {name}"
             )
+
         logger.debug(f"Molecule fetched successfully: {db_molecule}")
         return db_molecule
     except HTTPException as e:
@@ -114,6 +163,26 @@ async def read_molecule_by_name(
         logger.error(f"Error fetching molecule with name {name}: {e}")
         raise HTTPException(status_code=500, detail="Internal Server Error")
 
+@router.get("/by-name-exact", response_model=MoleculeBase)
+async def read_molecule_by_name_exact(name: str, db: AsyncSession = Depends(get_db)):
+    try:
+        logger.info(f"Fetching molecule with Name: {name}")
+        db_molecule = await get_molecule_by_name_exact(db=db, name=name)
+        if db_molecule is None:
+            logger.warning(f"Molecule with name {name} not found")
+            raise HTTPException(
+                status_code=404, detail=f"Molecule not found, Name: {name}"
+            )
+        logger.debug(f"Molecule fetched successfully: {db_molecule}")
+        return db_molecule
+    except ValueError as ve:
+        logger.error(f"Invalid molecule name : {ve}")
+        raise HTTPException(status_code=400, detail=f"Invalid molecule name: {ve}")
+    except HTTPException as e:
+        raise e
+    except Exception as e:
+        logger.error(f"Error fetching molecule with name {name}: {e}")
+        raise HTTPException(status_code=500, detail="Internal Server Error")
 
 @router.get("/by-smiles-canonical", response_model=MoleculeBase)
 async def read_molecule(smiles: str, db: AsyncSession = Depends(get_db)):

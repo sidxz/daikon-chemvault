@@ -23,9 +23,12 @@ def cluster_molecules_with_centroids(
     if not (0 < cutoff <= 1):
         raise ValueError("Invalid cutoff: Cutoff must be a float between 0 and 1.")
 
-    # Initialize lists to store canonical SMILES and RDKit Mol objects
-    canonical_smiles_list = []
+    # Initialize mappings
+    canonical_smiles_dict = {}
     mols = []
+    id_order = []
+    
+    logger.info(f"Starting clustering with {len(molecule_list)} molecules with cutoff {cutoff}.")
 
     # Convert SMILES to canonical SMILES and RDKit Mol objects
     for mol_data in molecule_list:
@@ -34,12 +37,13 @@ def cluster_molecules_with_centroids(
             if mol is None:
                 raise ValueError(f"Could not parse SMILES: {mol_data.smiles}")
             canonical_smiles = dm.to_smiles(mol, canonical=True)
-            canonical_smiles_list.append({
-                "id": mol_data.id,  # Keep UUID4 as is
-                "name": mol_data.name,  # Include name if it exists
+            canonical_smiles_dict[mol_data.id] = {
+                "id": mol_data.id,
+                "name": mol_data.name,
                 "smiles": canonical_smiles,
-            })
+            }
             mols.append(mol)
+            id_order.append(mol_data.id)
         except Exception as e:
             raise ValueError(f"Error processing molecule with ID {mol_data.id}: {e}")
 
@@ -49,10 +53,10 @@ def cluster_molecules_with_centroids(
     except Exception as e:
         raise RuntimeError(f"Error during clustering: {e}")
 
-    # Determine the number of clusters
+    # Determine number of clusters
     num_clusters = len(mol_clusters)
 
-    # Select the centroid molecule for each cluster
+    # Select centroid molecules for each cluster
     try:
         indices, centroids = dm.pick_centroids(mols, npick=num_clusters, threshold=cutoff, method="sphere", n_jobs=-1)
     except Exception as e:
@@ -60,24 +64,24 @@ def cluster_molecules_with_centroids(
 
     # Map molecules to their clusters and mark centroid molecules
     molecule_clusters = []
-    centroid_indices_set = set(indices)  # Convert centroid indices to a set for quick lookup
+    centroid_indices_set = set(indices)
 
     for i, mol_cluster in enumerate(mol_clusters):
         for mol in mol_cluster:
-            mol_smiles = dm.to_smiles(mol, canonical=True)
-            mol_data = next((m for m in canonical_smiles_list if m["smiles"] == mol_smiles), None)
-            if mol_data is not None:
-                # Check if the molecule is a centroid
-                is_centroid = canonical_smiles_list.index(mol_data) in centroid_indices_set
-                # Create ClusterOutputDto entry
-                molecule_clusters.append(ClusterOutputDto(
-                    id=mol_data["id"],
-                    name=mol_data["name"],
-                    smiles=mol_data["smiles"],
-                    cluster=i + 1,  # Cluster number starts from 1 for readability
-                    centroid=is_centroid
-                ))
-            else:
-                raise RuntimeError(f"Failed to find molecule data for SMILES: {mol_smiles}")
+            # Use index position to map back to original molecule ID
+            mol_index = mols.index(mol)
+            mol_id = id_order[mol_index]
+            mol_data = canonical_smiles_dict[mol_id]
+
+            is_centroid = mol_index in centroid_indices_set
+
+            # Append the ClusterOutputDto entry
+            molecule_clusters.append(ClusterOutputDto(
+                id=mol_data["id"],
+                name=mol_data["name"],
+                smiles=mol_data["smiles"],
+                cluster=i + 1,  # Cluster index starts from 1
+                centroid=is_centroid
+            ))
 
     return molecule_clusters

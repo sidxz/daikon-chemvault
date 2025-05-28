@@ -1,10 +1,14 @@
 import uuid
 from app.repositories import molecule as molecule_repo
+from app.repositories import pains as pains_repo
+
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.repositories.parent_molecule import get_parent_molecule
 from app.schemas.molecule import MoleculeUpdate
 from app.schemas.molecule_dto import InputMoleculeDto
 from app.core.logging_config import logger
+from app.schemas.pains import PainsCreate
+from app.services.molcal.rd_pains import detect_pains
 from app.services.molecule.standardization import standardize, standardize_parent
 from app.repositories.molecule import get_molecule_by_smiles
 from app.repositories import parent_molecule as parent_molecule_repo
@@ -75,6 +79,23 @@ async def register(input_molecule: InputMoleculeDto, db: AsyncSession):
             standardized_molecule.parent_id = new_parent_molecule.id
 
         new_molecule = await molecule_repo.create_molecule(db, standardized_molecule)
+        
+        # Step 4: Check for PAINS and store results
+        try:
+            pains_results = detect_pains([standardized_molecule])  # Call PAINS detection
+            if pains_results:
+                pains_entry = PainsCreate(
+                    id=standardized_molecule.id,
+                    rdkit_pains=pains_results[0].rdkit_pains,
+                    rdkit_pains_label=pains_results[0].rdkit_pains_label,
+                )
+                await pains_repo.create_pains(db, pains_entry)  # Save PAINS result
+                logger.info(f"PAINS detection completed for Molecule ID: {molecule_id}")
+            else:
+                logger.info(f"No PAINS detected for Molecule ID: {molecule_id}")
+        except Exception as e:
+            logger.error(f"Error during PAINS detection for Molecule ID {molecule_id}: {e}")
+
 
         return standardized_molecule
 
