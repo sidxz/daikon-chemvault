@@ -20,5 +20,6 @@
     "rdkit",
     "standardizer",
     "tpsa"
-  ]
+  ],
+  "python.pythonPath": "/Users/sidx/.local/share/virtualenvs/daikon-chemvault-api-7WWHIlj8/bin/python"
 }

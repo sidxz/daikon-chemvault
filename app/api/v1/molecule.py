@@ -7,6 +7,7 @@ from app.repositories import molecule as molecule_repo
 from app.schemas.molecule_dto import InputMoleculeDto, UpdateMoleculeDto
 from app.core.logging_config import logger
 from app.schemas.similar_molecule_dto import SimilarMoleculeDto
+from app.schemas.molecule_id_list import MoleculeIdList
 from app.services.molecule import batch_registration, registration
 from app.schemas.molecule import MoleculeBase, MoleculeRead
 from app.repositories.molecule import (
@@ -69,11 +70,12 @@ async def read_molecule(id: UUID, db: AsyncSession = Depends(get_db)):
         raise HTTPException(status_code=500, detail="Internal Server Error")
 
 
-@router.get("/by-ids", response_model=List[MoleculeRead])
+@router.post("/by-ids", response_model=List[MoleculeRead])
 async def read_molecules(
-    ids: List[UUID] = Query(...), db: AsyncSession = Depends(get_db)
+    body: MoleculeIdList, db: AsyncSession = Depends(get_db)
 ):
     try:
+        ids = body.ids
         logger.info(f"Fetching molecules with IDs: {ids}")
         db_molecules = await molecule_repo.get_molecules(db=db, ids=ids)
         if db_molecules is None:
