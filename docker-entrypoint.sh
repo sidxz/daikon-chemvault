@@ -1,9 +1,12 @@
 #!/bin/bash
 
+#VERSION
+DAIKON_CHEMVAULT_VERSION="1.3.0"
 # ANSI color codes for red (error), green (success), yellow (warning), and reset (no color)
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[0;33m'
+BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
 # Export the PostgreSQL password environment variable
@@ -13,6 +16,24 @@ export PGPASSWORD="${POSTGRES_PASSWORD}"
 function error_exit {
     echo -e "[$(date '+%Y-%m-%d %H:%M:%S')] ${RED}$1${NC}" 1>&2
     exit 1
+}
+
+function print_banner {
+echo -e "${BLUE}"
+cat << "EOF"
+ ____    _    ___ _  _____  _   _                 
+|  _ \  / \  |_ _| |/ / _ \| \ | |                
+| | | |/ _ \  | || ' / | | |  \| |                
+| |_| / ___ \ | || . \ |_| | |\  |                
+|____/_/   \_\___|_|\_\___/|_| \_|          _ _   
+ / ___| |__   ___ _ __ __\ \   / /_ _ _   _| | |_ 
+| |   | '_ \ / _ \ '_ ` _ \ \ / / _` | | | | | __|
+| |___| | | |  __/ | | | | \ V / (_| | |_| | | |_ 
+ \____|_| |_|\___|_| |_| |_|\_/ \__,_|\__,_|_|\__|
+
+EOF
+  echo -e "${GREEN}              Version v${DAIKON_CHEMVAULT_VERSION}${NC}"
+  echo
 }
 
 # Function to print a message with a timestamp
@@ -30,6 +51,9 @@ fi
 # Validate and extract database host and port using regex for better security and precision
 DB_HOST=$(echo "$DATABASE_URL" | grep -oP '(?<=@)[^:/]+' || error_exit "Error: Failed to extract DB_HOST from DATABASE_URL")
 DB_PORT=$(echo "$DATABASE_URL" | grep -oP '(?<=:)\d+(?=/)' || error_exit "Error: Failed to extract DB_PORT from DATABASE_URL")
+
+# Log Chemvault version
+print_banner
 
 # Print the database connection details (optional: remove in production to avoid leaking sensitive data)
 log "" "Database Host: $DB_HOST"
