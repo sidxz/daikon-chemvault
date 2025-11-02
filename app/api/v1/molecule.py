@@ -15,6 +15,7 @@ from app.repositories.molecule import (
     get_molecule_by_name,
     get_molecule_by_name_exact,
     get_molecule_by_smiles,
+    get_molecules_by_name_exact,
     get_molecules_by_smiles,
     search_substructure_multiple,
 )
@@ -185,6 +186,29 @@ async def read_molecule_by_name_exact(name: str, db: AsyncSession = Depends(get_
         raise e
     except Exception as e:
         logger.error(f"Error fetching molecule with name {name}: {e}")
+        raise HTTPException(status_code=500, detail="Internal Server Error")
+    
+@router.post("/get-molecules-by-name-or-synonym-exact", response_model=List[MoleculeBase])
+async def read_molecules_by_names_or_synonyms_exact(
+    names: List[str], db: AsyncSession = Depends(get_db)
+):
+    try:
+        logger.info(f"Fetching molecules with names or synonyms: {names}")
+        db_molecules = await get_molecules_by_name_exact(db=db, names=names)
+        if not db_molecules:
+            logger.warning(f"No molecules found for names or synonyms: {names}")
+            raise HTTPException(
+                status_code=404, detail=f"No molecules found for names or synonyms: {names}"
+            )
+        logger.debug(f"Molecules fetched successfully: {db_molecules}")
+        return db_molecules
+    except ValueError as ve:
+        logger.error(f"Invalid molecule name : {ve}")
+        raise HTTPException(status_code=400, detail=f"Invalid molecule name: {ve}")
+    except HTTPException as e:
+        raise e
+    except Exception as e:
+        logger.error(f"Error fetching molecules with names or synonyms {names}: {e}")
         raise HTTPException(status_code=500, detail="Internal Server Error")
 
 
