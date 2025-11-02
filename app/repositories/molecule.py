@@ -264,6 +264,27 @@ async def get_molecule_by_smiles(db: AsyncSession, smiles_canonical: str):
         raise HTTPException(status_code=500, detail="Internal Server Error")
 
 
+async def get_molecules_by_smiles(db: AsyncSession, smiles_list: List[str]):
+    try:
+        logger.debug(f"Fetching molecules with SMILES list of length: {len(smiles_list)}")
+        # standardize the smiles
+        std_smiles_list = [standardize_smiles(smiles) for smiles in smiles_list]
+        result = await db.execute(
+            select(Molecule).filter(Molecule.smiles_canonical.in_(std_smiles_list))
+        )
+        db_molecules = result.scalars().all()
+        if not db_molecules:
+            logger.debug(f"No molecules found for provided SMILES list")
+            return None
+        logger.debug(f"Fetched {len(db_molecules)} molecules successfully")
+        return db_molecules
+    except ValueError as ve:
+        logger.error(f"Invalid molecule smiles in the provided list")
+        raise HTTPException(status_code=400, detail=f"Invalid molecule smiles: {ve}")
+    except Exception as e:
+        logger.error(f"Error fetching molecules with provided SMILES list: {e}")
+        raise HTTPException(status_code=500, detail="Internal Server Error")
+
 # Create a new molecule and commit it to the database
 async def create_molecule(db: AsyncSession, molecule: MoleculeCreate):
     try:
