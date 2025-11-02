@@ -2,7 +2,12 @@ from sqlalchemy import UUID
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 from app.db.models.molecule import Molecule
-from app.schemas.molecule import MoleculeBase, MoleculeCreate, MoleculeRead, MoleculeUpdate
+from app.schemas.molecule import (
+    MoleculeBase,
+    MoleculeCreate,
+    MoleculeRead,
+    MoleculeUpdate,
+)
 from app.core.logging_config import logger
 from fastapi import HTTPException
 from app.schemas.similar_molecule_dto import SimilarMoleculeDto
@@ -110,10 +115,10 @@ async def get_molecule(db: AsyncSession, id: UUID):
     try:
         logger.info(f"Fetching molecule with ID: {id}")
         result = await db.execute(
-        select(Molecule)
-        .options(selectinload(Molecule.pains))  # Ensure related data is preloaded
-        .filter(Molecule.id == id)
-    )
+            select(Molecule)
+            .options(selectinload(Molecule.pains))  # Ensure related data is preloaded
+            .filter(Molecule.id == id)
+        )
         db_molecule = result.scalar()
         if not db_molecule:
             logger.info(f"Molecule with ID {id} not found")
@@ -144,13 +149,12 @@ async def get_molecules(db: AsyncSession, ids: List[UUID]):
         logger.error(f"Error fetching molecules with IDs {ids}: {e}")
         raise HTTPException(status_code=500, detail="Internal Server Error")
 
+
 # Fetch all molecules from the database
 async def get_all_molecules(db: AsyncSession):
     try:
         logger.info("Fetching all molecules from the database")
-        result = await db.execute(
-            select(Molecule)
-        )
+        result = await db.execute(select(Molecule))
         db_molecules = result.scalars().all()
         logger.debug(f"Fetched {len(db_molecules)} molecules")
         return db_molecules
@@ -161,10 +165,7 @@ async def get_all_molecules(db: AsyncSession):
 
 # Fetch molecule by name, return similar names and if name is found in synonyms
 async def get_molecule_by_name(
-    db: AsyncSession, 
-    name: str, 
-    limit: int = 100, 
-    filters: Dict[str, Any] = None
+    db: AsyncSession, name: str, limit: int = 100, filters: Dict[str, Any] = None
 ) -> List[MoleculeBase]:
     """
     Fetch molecules by name or synonyms with optional filters.
@@ -223,13 +224,15 @@ async def get_molecule_by_name(
     except Exception as e:
         logger.error(f"Error fetching molecules with name {name}: {e}")
         raise HTTPException(status_code=500, detail="Internal Server Error")
-    
-    
+
+#TODO: BUG Molecule.synonyms.in_(names) would never match since synonyms is a string field
 async def get_molecule_by_name_exact(db: AsyncSession, name: str):
     try:
         logger.info(f"Fetching molecule with name: {name}")
         result = await db.execute(
-            select(Molecule).filter(or_(Molecule.name == name, Molecule.synonyms == name))
+            select(Molecule).filter(
+                or_(Molecule.name == name, Molecule.synonyms == name)
+            )
         )
         db_molecule = result.scalar()
         if not db_molecule:
@@ -239,6 +242,25 @@ async def get_molecule_by_name_exact(db: AsyncSession, name: str):
         return db_molecule
     except Exception as e:
         logger.error(f"Error fetching molecule with name {name}: {e}")
+        raise HTTPException(status_code=500, detail="Internal Server Error")
+
+#TODO: BUG Molecule.synonyms.in_(names) would never match since synonyms is a string field
+async def get_molecules_by_name_exact(db: AsyncSession, names: List[str]):
+    try:
+        logger.info(f"Fetching molecules with names: {names}")
+        result = await db.execute(
+            select(Molecule).filter(
+                or_(Molecule.name.in_(names), Molecule.synonyms.in_(names))
+            )
+        )
+        db_molecules = result.scalars().all()
+        if not db_molecules:
+            logger.info(f"No molecules found for names: {names}")
+            return None
+        logger.debug(f"Molecules fetched successfully: {db_molecules}")
+        return db_molecules
+    except Exception as e:
+        logger.error(f"Error fetching molecules with names {names}: {e}")
         raise HTTPException(status_code=500, detail="Internal Server Error")
 
 
@@ -261,6 +283,39 @@ async def get_molecule_by_smiles(db: AsyncSession, smiles_canonical: str):
         raise HTTPException(status_code=400, detail=f"Invalid molecule smiles: {ve}")
     except Exception as e:
         logger.error(f"Error fetching molecule with SMILES {smiles_canonical}: {e}")
+        raise HTTPException(status_code=500, detail="Internal Server Error")
+
+
+async def get_molecules_by_smiles(db: AsyncSession, smiles_list: List[str]):
+    try:
+        logger.debug(
+            f"Fetching molecules with SMILES list of length: {len(smiles_list)}"
+        )
+        # standardize the smiles
+        std_smiles_list = []
+        for smiles in smiles_list:
+            try:
+                std_smiles = standardize_smiles(smiles)
+                std_smiles_list.append(std_smiles)
+            except Exception:
+                logger.warning(f"Skipping invalid SMILES: {smiles}")
+        if not std_smiles_list:
+            logger.debug("No valid SMILES found in the provided list")
+            return None
+        result = await db.execute(
+            select(Molecule).filter(Molecule.smiles_canonical.in_(std_smiles_list))
+        )
+        db_molecules = result.scalars().all()
+        if not db_molecules:
+            logger.debug(f"No molecules found for provided SMILES list")
+            return None
+        logger.debug(f"Fetched {len(db_molecules)} molecules successfully")
+        return db_molecules
+    except ValueError as ve:
+        logger.error(f"Invalid molecule smiles in the provided list")
+        raise HTTPException(status_code=400, detail=f"Invalid molecule smiles: {ve}")
+    except Exception as e:
+        logger.error(f"Error fetching molecules with provided SMILES list: {e}")
         raise HTTPException(status_code=500, detail="Internal Server Error")
 
 

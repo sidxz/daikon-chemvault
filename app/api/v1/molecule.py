@@ -15,6 +15,8 @@ from app.repositories.molecule import (
     get_molecule_by_name,
     get_molecule_by_name_exact,
     get_molecule_by_smiles,
+    get_molecules_by_name_exact,
+    get_molecules_by_smiles,
     search_substructure_multiple,
 )
 from app.services.molecule.batch_registration_parent import process_all_molecule_batches
@@ -30,6 +32,7 @@ async def get_db():
             yield db
         finally:
             await db.close()
+
 
 @router.post("/", response_model=MoleculeBase)
 async def create_molecule(
@@ -71,9 +74,7 @@ async def read_molecule(id: UUID, db: AsyncSession = Depends(get_db)):
 
 
 @router.post("/by-ids", response_model=List[MoleculeRead])
-async def read_molecules(
-    body: MoleculeIdList, db: AsyncSession = Depends(get_db)
-):
+async def read_molecules(body: MoleculeIdList, db: AsyncSession = Depends(get_db)):
     try:
         ids = body.ids
         logger.info(f"Fetching molecules with IDs: {ids}")
@@ -165,6 +166,7 @@ async def read_molecule_by_name(
         logger.error(f"Error fetching molecule with name {name}: {e}")
         raise HTTPException(status_code=500, detail="Internal Server Error")
 
+
 @router.get("/by-name-exact", response_model=MoleculeBase)
 async def read_molecule_by_name_exact(name: str, db: AsyncSession = Depends(get_db)):
     try:
@@ -185,9 +187,33 @@ async def read_molecule_by_name_exact(name: str, db: AsyncSession = Depends(get_
     except Exception as e:
         logger.error(f"Error fetching molecule with name {name}: {e}")
         raise HTTPException(status_code=500, detail="Internal Server Error")
+    
+@router.post("/get-molecules-by-name-or-synonym-exact", response_model=List[MoleculeBase])
+async def read_molecules_by_names_or_synonyms_exact(
+    names: List[str], db: AsyncSession = Depends(get_db)
+):
+    try:
+        logger.info(f"Fetching molecules with names or synonyms: {names}")
+        db_molecules = await get_molecules_by_name_exact(db=db, names=names)
+        if not db_molecules:
+            logger.warning(f"No molecules found for names or synonyms: {names}")
+            raise HTTPException(
+                status_code=404, detail=f"No molecules found for names or synonyms: {names}"
+            )
+        logger.debug(f"Molecules fetched successfully: {db_molecules}")
+        return db_molecules
+    except ValueError as ve:
+        logger.error(f"Invalid molecule name : {ve}")
+        raise HTTPException(status_code=400, detail=f"Invalid molecule name: {ve}")
+    except HTTPException as e:
+        raise e
+    except Exception as e:
+        logger.error(f"Error fetching molecules with names or synonyms {names}: {e}")
+        raise HTTPException(status_code=500, detail="Internal Server Error")
+
 
 @router.get("/by-smiles-canonical", response_model=MoleculeBase)
-async def read_molecule(smiles: str, db: AsyncSession = Depends(get_db)):
+async def read_molecule_by_smiles(smiles: str, db: AsyncSession = Depends(get_db)):
     try:
         logger.info(f"Fetching molecule with canonical smiles: {smiles}")
         db_molecule = await get_molecule_by_smiles(db=db, smiles_canonical=smiles)
@@ -205,6 +231,30 @@ async def read_molecule(smiles: str, db: AsyncSession = Depends(get_db)):
         raise e
     except Exception as e:
         logger.error(f"Error fetching molecule with smiles_canonical {smiles}: {e}")
+        raise HTTPException(status_code=500, detail="Internal Server Error")
+
+
+@router.post("/by-smiles-list", response_model=List[MoleculeBase])
+async def read_molecules_by_smiles_list(
+    smiles_list: List[str], db: AsyncSession = Depends(get_db)
+):
+    try:
+        logger.info(f"Fetching molecules with SMILES list: {smiles_list}")
+        db_molecules = await get_molecules_by_smiles(db=db, smiles_list=smiles_list)
+        if not db_molecules:
+            logger.warning(f"No molecules found for provided SMILES list")
+            raise HTTPException(
+                status_code=404, detail=f"No molecules found for provided SMILES list"
+            )
+        logger.debug(f"Molecules fetched successfully: {db_molecules}")
+        return db_molecules
+    except ValueError as ve:
+        logger.error(f"Invalid molecule smiles in the provided list")
+        raise HTTPException(status_code=400, detail=f"Invalid molecule smiles: {ve}")
+    except HTTPException as e:
+        raise e
+    except Exception as e:
+        logger.error(f"Error fetching molecules with provided SMILES list: {e}")
         raise HTTPException(status_code=500, detail="Internal Server Error")
 
 
