@@ -210,7 +210,7 @@ async def read_molecule_by_smiles(smiles: str, db: AsyncSession = Depends(get_db
         raise HTTPException(status_code=500, detail="Internal Server Error")
 
 
-@router.get("/by-smiles-list", response_model=List[MoleculeBase])
+@router.post("/by-smiles-list", response_model=List[MoleculeBase])
 async def read_molecules_by_smiles_list(
     smiles_list: List[str], db: AsyncSession = Depends(get_db)
 ):

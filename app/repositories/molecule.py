@@ -268,7 +268,16 @@ async def get_molecules_by_smiles(db: AsyncSession, smiles_list: List[str]):
     try:
         logger.debug(f"Fetching molecules with SMILES list of length: {len(smiles_list)}")
         # standardize the smiles
-        std_smiles_list = [standardize_smiles(smiles) for smiles in smiles_list]
+        std_smiles_list = []
+        for smiles in smiles_list:
+            try:
+                std_smiles = standardize_smiles(smiles)
+                std_smiles_list.append(std_smiles)
+            except Exception:
+                logger.warning(f"Skipping invalid SMILES: {smiles}")
+        if not std_smiles_list:
+            logger.debug("No valid SMILES found in the provided list")
+            return None
         result = await db.execute(
             select(Molecule).filter(Molecule.smiles_canonical.in_(std_smiles_list))
         )
