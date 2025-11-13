@@ -9,6 +9,7 @@ from app.db.models.parent_molecule import ParentMolecule
 from app.repositories.molecule import (
     bulk_create_molecules,
     get_molecule_by_smiles,
+    get_molecules_by_name_exact,
 )
 from app.repositories.parent_molecule import (
     bulk_create_parent_molecules,
@@ -27,6 +28,7 @@ from chembl_structure_pipeline import standardizer
 import datamol as dm
 import re
 from app.repositories import pains as pains_repo
+from app.services.molecule.registration_helpers import _name_key, _split_synonyms_csv
 
 semaphore = asyncio.Semaphore(30)
 
@@ -79,6 +81,83 @@ def validate_input_molecules(
     return valid_molecules
 
 
+async def filter_conflicting_name_structure(
+    standardized_molecules: List[Molecule], db: AsyncSession
+) -> List[Molecule]:
+    """
+    Enforce:
+      - Within the batch: same normalized name -> same smiles_canonical.
+      - Vs DB: if a name already exists, it must map to same smiles_canonical.
+
+    Conflicting molecules are SKIPPED (logged), not causing the whole batch to fail.
+    """
+    filtered: list[Molecule] = []
+    name_to_smiles_batch: dict[str, str] = {}
+    name_to_display: dict[str, str] = {}
+
+    # 1) Intra-batch consistency: keep first, drop conflicting later ones
+    for m in standardized_molecules:
+        if m is None:
+            continue
+        key = _name_key(m.name)
+        if not key:
+            filtered.append(m)
+            continue
+
+        smi = m.smiles_canonical
+        if key in name_to_smiles_batch:
+            if name_to_smiles_batch[key] != smi:
+                logger.warning(
+                    f"Skipping molecule '{m.name}' in batch: name maps to multiple "
+                    f"structures ({name_to_smiles_batch[key]} vs {smi})."
+                )
+                continue  # skip conflicting
+        else:
+            name_to_smiles_batch[key] = smi
+            name_to_display[key] = m.name.strip()
+
+        filtered.append(m)
+
+    if not name_to_smiles_batch:
+        return filtered
+
+    # 2) Consistency vs DB
+    # Use original display names for lookup
+    names_for_lookup = list({v for v in name_to_display.values() if v})
+    existing = await get_molecules_by_name_exact(db, names_for_lookup)
+    if not existing:
+        return filtered
+
+    # Build DB map
+    db_name_to_smi: dict[str, str] = {}
+    for mol in existing:
+        key = _name_key(mol.name)
+        if not key:
+            continue
+        db_name_to_smi[key] = mol.smiles_canonical
+
+    # Drop molecules whose name conflicts with an existing DB structure
+    final: list[Molecule] = []
+    for m in filtered:
+        key = _name_key(m.name)
+        if not key or key not in db_name_to_smi:
+            final.append(m)
+            continue
+
+        batch_smi = m.smiles_canonical
+        db_smi = db_name_to_smi[key]
+        if db_smi != batch_smi:
+            logger.warning(
+                f"Skipping molecule '{m.name}' in batch: name already exists in DB "
+                f"for a different structure ({db_smi} vs {batch_smi})."
+            )
+            continue
+
+        final.append(m)
+
+    return final
+
+
 async def register_molecules_batch(input_molecules: List[InputMoleculeDto]):
     logger.info(f"Received batch of {len(input_molecules)} molecules")
 
@@ -90,7 +169,16 @@ async def register_molecules_batch(input_molecules: List[InputMoleculeDto]):
     async for db in get_db():
         try:
             standardized_molecules = await standardize_molecules(validated_molecules)
+            standardized_molecules = [
+                m for m in standardized_molecules if m is not None
+            ]
+
+            # NEW: enforce name–structure consistency; skip conflicts
+            standardized_molecules = await filter_conflicting_name_structure(
+                standardized_molecules, db
+            )
             consolidated_molecules = consolidate_duplicates(standardized_molecules)
+
             molecules_to_update, molecules_to_register, not_changed_molecules = (
                 await filter_existing_molecules(consolidated_molecules, db)
             )
@@ -189,24 +277,42 @@ async def standardize_molecule(input_molecule: InputMoleculeDto):
 def consolidate_duplicates(standardized_molecules: List[Molecule]) -> List[Molecule]:
     """
     Consolidate molecules with the same canonical SMILES by combining their names into synonyms.
+    Synonyms are stored as CSV without spaces, deduped using the normalized key.
     """
-    consolidated_molecule_dict = {}
+    consolidated_molecule_dict: dict[str, Molecule] = {}
 
     for molecule in standardized_molecules:
-        if molecule.smiles_canonical in consolidated_molecule_dict:
-            # If canonical SMILES already exists, combine names into synonyms
-            existing_molecule = consolidated_molecule_dict[molecule.smiles_canonical]
-            existing_molecule.synonyms = (
-                existing_molecule.synonyms + ", " + molecule.name
-                if existing_molecule.synonyms
-                else molecule.name
-            )
-        else:
-            # If it's a new canonical SMILES, add the molecule to the dictionary
-            molecule.synonyms = molecule.name  # Set the initial synonym as the name
-            consolidated_molecule_dict[molecule.smiles_canonical] = molecule
+        if molecule is None:
+            continue
 
-    # Return the list of consolidated molecules
+        smi = molecule.smiles_canonical
+        primary_name = (molecule.name or "").strip()
+
+        if smi in consolidated_molecule_dict:
+            existing = consolidated_molecule_dict[smi]
+
+            # Build key->display map for synonyms
+            syn_map: dict[str, str] = {}
+            for s in _split_synonyms_csv(existing.synonyms):
+                syn_map.setdefault(_name_key(s), s)
+
+            # Add incoming name as synonym if different
+            key = _name_key(primary_name)
+            if key and key != _name_key(existing.name):
+                syn_map.setdefault(key, primary_name)
+
+            # Canonical storage: sorted, no spaces
+            existing.synonyms = ",".join(sorted(syn_map.values()))
+        else:
+            molecule.name = primary_name
+            # Initial synonyms = just this name (not normalized in display, but key is)
+            key = _name_key(primary_name)
+            syn_map = {}
+            if key:
+                syn_map[key] = primary_name
+            molecule.synonyms = ",".join(sorted(syn_map.values()))
+            consolidated_molecule_dict[smi] = molecule
+
     return list(consolidated_molecule_dict.values())
 
 
@@ -218,28 +324,41 @@ async def filter_existing_molecules(
     smiles_list = [molecule.smiles_canonical for molecule in standardized_molecules]
     existing_molecules = await get_existing_molecules_by_smiles(smiles_list, db)
 
-    updated_molecules = []
-    new_molecules = []
-    not_changed_molecules = []
+    updated_molecules: list[Molecule] = []
+    new_molecules: list[Molecule] = []
+    not_changed_molecules: list[Molecule] = []
 
     for molecule in standardized_molecules:
         existing_molecule = existing_molecules.get(molecule.smiles_canonical)
 
         if existing_molecule:
-            existing_molecule.synonyms = existing_molecule.synonyms or ""
-            molecule.synonyms = molecule.synonyms or ""
-            existing_names_set = set(existing_molecule.synonyms.split(", ")) | {
-                existing_molecule.name
-            }
-            new_names_set = set(molecule.synonyms.split(", ")) | {molecule.name}
+            # Build sets of names (including primary name) from both sides
+            existing_names = set(_split_synonyms_csv(existing_molecule.synonyms))
+            existing_names.add((existing_molecule.name or "").strip())
 
-            if new_names_set.issubset(existing_names_set):
+            new_names = set(_split_synonyms_csv(molecule.synonyms))
+            new_names.add((molecule.name or "").strip())
+
+            # Normalize for comparison (same key as lookup)
+            existing_keys = {_name_key(n) for n in existing_names if n}
+            new_keys = {_name_key(n) for n in new_names if n}
+
+            if new_keys.issubset(existing_keys):
+                # Nothing new to add
                 not_changed_molecules.append(existing_molecule)
                 continue
 
-            existing_names_set.update(new_names_set)
-            existing_names_set.discard(existing_molecule.name)
-            existing_molecule.synonyms = ", ".join(sorted(existing_names_set))
+            # Merge sets but keep primary name out of synonyms
+            merged_display: dict[str, str] = {}
+
+            for n in existing_names | new_names:
+                if not n:
+                    continue
+                key = _name_key(n)
+                if key and key != _name_key(existing_molecule.name):
+                    merged_display.setdefault(key, n)
+
+            existing_molecule.synonyms = ",".join(sorted(merged_display.values()))
             updated_molecules.append(existing_molecule)
         else:
             new_molecules.append(molecule)
