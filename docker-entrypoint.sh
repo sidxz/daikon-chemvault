@@ -1,7 +1,7 @@
 #!/bin/bash
 
 #VERSION
-DAIKON_CHEMVAULT_VERSION="1.4.0"
+DAIKON_CHEMVAULT_VERSION="1.5.0"
 # ANSI color codes for red (error), green (success), yellow (warning), and reset (no color)
 RED='\033[0;31m'
 GREEN='\033[0;32m'
