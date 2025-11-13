@@ -87,7 +87,8 @@ async def filter_conflicting_name_structure(
     """
     Enforce:
       - Within the batch: same normalized name -> same smiles_canonical.
-      - Vs DB: if a name already exists, it must map to same smiles_canonical.
+      - Vs DB: if a name (as primary or synonym) already exists, it must map
+        to the same smiles_canonical.
 
     Conflicting molecules are SKIPPED (logged), not causing the whole batch to fail.
     """
@@ -95,12 +96,16 @@ async def filter_conflicting_name_structure(
     name_to_smiles_batch: dict[str, str] = {}
     name_to_display: dict[str, str] = {}
 
-    # 1) Intra-batch consistency: keep first, drop conflicting later ones
+    # -----------------------------
+    # 1) Intra-batch consistency
+    # -----------------------------
     for m in standardized_molecules:
         if m is None:
             continue
+
         key = _name_key(m.name)
         if not key:
+            # No name -> can't do name-based checks; still keep it
             filtered.append(m)
             continue
 
@@ -111,7 +116,7 @@ async def filter_conflicting_name_structure(
                     f"Skipping molecule '{m.name}' in batch: name maps to multiple "
                     f"structures ({name_to_smiles_batch[key]} vs {smi})."
                 )
-                continue  # skip conflicting
+                continue  # skip conflicting batch entry
         else:
             name_to_smiles_batch[key] = smi
             name_to_display[key] = m.name.strip()
@@ -121,22 +126,47 @@ async def filter_conflicting_name_structure(
     if not name_to_smiles_batch:
         return filtered
 
-    # 2) Consistency vs DB
-    # Use original display names for lookup
+    # -----------------------------
+    # 2) Consistency vs DB (names and synonyms)
+    # -----------------------------
+    # Use original display names for lookup (so get_molecules_by_name_exact can
+    # match on primary name or synonyms)
     names_for_lookup = list({v for v in name_to_display.values() if v})
     existing = await get_molecules_by_name_exact(db, names_for_lookup)
     if not existing:
         return filtered
 
-    # Build DB map
+    # Build a map: normalized_name_key -> smiles_canonical (from DB),
+    # using BOTH mol.name and each synonym token.
     db_name_to_smi: dict[str, str] = {}
-    for mol in existing:
-        key = _name_key(mol.name)
-        if not key:
-            continue
-        db_name_to_smi[key] = mol.smiles_canonical
 
-    # Drop molecules whose name conflicts with an existing DB structure
+    for mol in existing:
+        # Collect all names this molecule claims: primary + synonyms
+        all_names: list[str] = []
+        if mol.name:
+            all_names.append(mol.name)
+        all_names.extend(_split_synonyms_csv(mol.synonyms))
+
+        for raw_name in all_names:
+            key = _name_key(raw_name)
+            if not key:
+                continue
+
+            if key in db_name_to_smi and db_name_to_smi[key] != mol.smiles_canonical:
+                # Your DB is already inconsistent (same name -> multiple structures).
+                # Log and keep the first mapping; we still use this for conflict checks.
+                logger.error(
+                    "Name '%s' in DB already maps to multiple structures: %s vs %s. "
+                    "Using the first one for conflict checks.",
+                    raw_name,
+                    db_name_to_smi[key],
+                    mol.smiles_canonical,
+                )
+                continue
+
+            db_name_to_smi.setdefault(key, mol.smiles_canonical)
+
+    # Now drop batch molecules whose name would conflict with an existing DB mapping
     final: list[Molecule] = []
     for m in filtered:
         key = _name_key(m.name)
@@ -146,12 +176,16 @@ async def filter_conflicting_name_structure(
 
         batch_smi = m.smiles_canonical
         db_smi = db_name_to_smi[key]
+
         if db_smi != batch_smi:
             logger.warning(
-                f"Skipping molecule '{m.name}' in batch: name already exists in DB "
-                f"for a different structure ({db_smi} vs {batch_smi})."
+                "Skipping molecule '%s' in batch: name already exists in DB for a "
+                "different structure (%s vs %s).",
+                m.name,
+                db_smi,
+                batch_smi,
             )
-            continue
+            continue  # skip conflicting entry
 
         final.append(m)
 
