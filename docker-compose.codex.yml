@@ -1,0 +1,38 @@
+version: "3.9"
+
+services:
+  daikon_chem_vault_db:
+    image: informaticsmatters/rdkit-cartridge-debian:Release_2024_03_3
+    restart: always
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-chemvault}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-chemvault}
+      POSTGRES_DB: ${POSTGRES_DB:-chemvault}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - codex-net
+
+  daikon_chem_vault_api:
+    build: .
+    depends_on:
+      - daikon_chem_vault_db
+    volumes:
+      - .:/app
+    ports:
+      - "10001:10001"
+    env_file:
+      - .env.codex
+    environment:
+      DATABASE_URL: ${DATABASE_URL:-postgresql+asyncpg://${POSTGRES_USER:-chemvault}:${POSTGRES_PASSWORD:-chemvault}@daikon_chem_vault_db:5432/${POSTGRES_DB:-chemvault}}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      LOG_JSON: ${LOG_JSON:-false}
+    networks:
+      - codex-net
+
+networks:
+  codex-net:
+    driver: bridge
+
+volumes:
+  postgres_data:
