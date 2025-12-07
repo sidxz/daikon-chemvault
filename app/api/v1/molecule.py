@@ -2,7 +2,8 @@ from typing import List, Optional
 from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, Query, BackgroundTasks
 from sqlalchemy.ext.asyncio import AsyncSession
-from app.db.base import SessionLocal
+
+from app.db.dependencies import get_db_session
 from app.repositories import molecule as molecule_repo
 from app.schemas.molecule_dto import InputMoleculeDto, UpdateMoleculeDto
 from app.core.logging_config import logger
@@ -25,18 +26,9 @@ from app.services.molecule.similarity import find_similar_molecules
 router = APIRouter()
 
 
-# Dependency to get the database session
-async def get_db():
-    async with SessionLocal() as db:
-        try:
-            yield db
-        finally:
-            await db.close()
-
-
 @router.post("/", response_model=MoleculeBase)
 async def create_molecule(
-    molecule: InputMoleculeDto, db: AsyncSession = Depends(get_db)
+    molecule: InputMoleculeDto, db: AsyncSession = Depends(get_db_session)
 ):
     try:
         logger.info(f"Creating a new molecule with data: {molecule.model_dump()}")
@@ -54,7 +46,7 @@ async def create_molecule(
 
 
 @router.get("/by-id/{id}", response_model=MoleculeRead)
-async def read_molecule(id: UUID, db: AsyncSession = Depends(get_db)):
+async def read_molecule(id: UUID, db: AsyncSession = Depends(get_db_session)):
     try:
         logger.info(f"Fetching molecule with ID: {id}")
         db_molecule = await get_molecule(db=db, id=id)
@@ -74,7 +66,7 @@ async def read_molecule(id: UUID, db: AsyncSession = Depends(get_db)):
 
 
 @router.post("/by-ids", response_model=List[MoleculeRead])
-async def read_molecules(body: MoleculeIdList, db: AsyncSession = Depends(get_db)):
+async def read_molecules(body: MoleculeIdList, db: AsyncSession = Depends(get_db_session)):
     try:
         ids = body.ids
         logger.info(f"Fetching molecules with IDs: {ids}")
@@ -116,7 +108,7 @@ async def read_molecule_by_name(
     aromatic_rings_max: Optional[int] = None,
     rings_min: Optional[int] = None,
     rings_max: Optional[int] = None,
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_db_session),
 ):
     try:
         logger.info(f"Fetching molecule with Name: {name}")
@@ -168,7 +160,7 @@ async def read_molecule_by_name(
 
 
 @router.get("/by-name-exact", response_model=MoleculeBase)
-async def read_molecule_by_name_exact(name: str, db: AsyncSession = Depends(get_db)):
+async def read_molecule_by_name_exact(name: str, db: AsyncSession = Depends(get_db_session)):
     try:
         logger.info(f"Fetching molecule with Name: {name}")
         db_molecule = await get_molecule_by_name_exact(db=db, name=name)
@@ -190,7 +182,7 @@ async def read_molecule_by_name_exact(name: str, db: AsyncSession = Depends(get_
     
 @router.post("/get-molecules-by-name-or-synonym-exact", response_model=List[MoleculeBase])
 async def read_molecules_by_names_or_synonyms_exact(
-    names: List[str], db: AsyncSession = Depends(get_db)
+    names: List[str], db: AsyncSession = Depends(get_db_session)
 ):
     try:
         logger.info(f"Fetching molecules with names or synonyms: {names}")
@@ -213,7 +205,7 @@ async def read_molecules_by_names_or_synonyms_exact(
 
 
 @router.get("/by-smiles-canonical", response_model=MoleculeBase)
-async def read_molecule_by_smiles(smiles: str, db: AsyncSession = Depends(get_db)):
+async def read_molecule_by_smiles(smiles: str, db: AsyncSession = Depends(get_db_session)):
     try:
         logger.info(f"Fetching molecule with canonical smiles: {smiles}")
         db_molecule = await get_molecule_by_smiles(db=db, smiles_canonical=smiles)
@@ -236,7 +228,7 @@ async def read_molecule_by_smiles(smiles: str, db: AsyncSession = Depends(get_db
 
 @router.post("/by-smiles-list", response_model=List[MoleculeBase])
 async def read_molecules_by_smiles_list(
-    smiles_list: List[str], db: AsyncSession = Depends(get_db)
+    smiles_list: List[str], db: AsyncSession = Depends(get_db_session)
 ):
     try:
         logger.info(f"Fetching molecules with SMILES list: {smiles_list}")
@@ -261,7 +253,7 @@ async def read_molecules_by_smiles_list(
 # Update molecule can ONLY update molecule name and synonyms
 @router.put("/{id}", response_model=MoleculeBase)
 async def update_molecule(
-    id: UUID, molecule: UpdateMoleculeDto, db: AsyncSession = Depends(get_db)
+    id: UUID, molecule: UpdateMoleculeDto, db: AsyncSession = Depends(get_db_session)
 ):
     try:
         molecule.id = id
@@ -279,7 +271,7 @@ async def update_molecule(
 
 
 @router.delete("/{id}")
-async def delete_molecule(id: UUID, db: AsyncSession = Depends(get_db)):
+async def delete_molecule(id: UUID, db: AsyncSession = Depends(get_db_session)):
     try:
         logger.info(f"Deleting molecule with ID: {id}")
         await molecule_repo.delete_molecule(db=db, id=id)
@@ -313,7 +305,7 @@ async def similarity_search(
     aromatic_rings_max: Optional[int] = None,
     rings_min: Optional[int] = None,
     rings_max: Optional[int] = None,
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_db_session),
 ):
     # Prepare a dictionary of filters with non-None values
     filters = {
@@ -366,7 +358,7 @@ async def substructure_search(
     aromatic_rings_max: Optional[int] = None,
     rings_min: Optional[int] = None,
     rings_max: Optional[int] = None,
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_db_session),
 ):
     try:
         logger.info(f"Initiating substructure search for smiles: {smiles}")
@@ -434,7 +426,7 @@ async def substructure_search_all(
     aromatic_rings_max: Optional[int] = None,
     rings_min: Optional[int] = None,
     rings_max: Optional[int] = None,
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_db_session),
 ):
     """
     API endpoint for substructure search where all substructures must be found in the molecule.

@@ -1,30 +1,22 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing import List
-from app.db.base import SessionLocal
+
+from app.core.logging_config import logger
+from app.db.dependencies import get_db_session
 from app.schemas.cluster_dto import ClusterInputDto, ClusterOutputDto
 from app.schemas.pains_dto import PainsOutputDto
 from app.services.molcal.cluster import cluster_molecules_with_centroids
-from app.core.logging_config import logger
 import time
 
 router = APIRouter()
-
-
-# Dependency to get the database session
-async def get_db():
-    async with SessionLocal() as db:
-        try:
-            yield db
-        finally:
-            await db.close()
 
 
 @router.post("/cluster", response_model=List[ClusterOutputDto])
 async def cluster_molecules(
     molecules: List[ClusterInputDto],
     cutoff: float = 0.7,
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_db_session),
 ):
     try:
         logger.info(f"Clustering request received with {len(molecules)} molecules.")
@@ -54,7 +46,7 @@ async def cluster_molecules(
 
 @router.post("/pains", response_model=List[PainsOutputDto])
 async def detect_pains(
-    molecules: List[ClusterInputDto], db: AsyncSession = Depends(get_db)
+    molecules: List[ClusterInputDto], db: AsyncSession = Depends(get_db_session)
 ):
     try:
         logger.info(
