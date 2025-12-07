@@ -1,28 +1,21 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing import List, Optional
-from app.db.base import SessionLocal
+
+from app.core.logging_config import logger
+from app.db.dependencies import get_db_session
 from app.repositories.molecule import get_all_molecules, get_molecules
 from app.repositories import pains as pains_repo
 from app.schemas.pains import PainsCreate
-from app.core.logging_config import logger
 from app.services.molcal.rd_pains import detect_pains
 
 router = APIRouter()
-
-# Dependency to get the database session
-async def get_db():
-    async with SessionLocal() as db:
-        try:
-            yield db
-        finally:
-            await db.close()
 
 
 @router.post("/regenerate_pains_all", response_model=dict)
 async def generate_pains_data(
     molecule_ids: Optional[List[str]] = None,
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_db_session),
 ):
     """
     Generate PAINS data for existing molecules.

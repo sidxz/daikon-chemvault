@@ -1,39 +1,33 @@
 # core/logging_config.py
 
 import sys
-from loguru import logger
-from dotenv import load_dotenv
 from pathlib import Path
-import os
 
-# Load environment variables from a .env file if present
-load_dotenv()
+from loguru import logger
 
-# Determine logging level and format from environment variables
-log_level = os.getenv("LOG_LEVEL", "DEBUG").upper()
-log_json = os.getenv("LOG_JSON", "False").lower() == "true"
+from app.core.settings import settings
 
-# Remove the default Loguru logger configuration to apply custom settings
-logger.remove()
 
-# Configure the logger to output to stderr with optional JSON serialization
-logger.add(sys.stderr, level=log_level, serialize=log_json)
+def configure_logging() -> None:
+    """Configure Loguru based on the current settings."""
 
-# Define the project root directory and the logs directory
-project_root = Path(__file__).resolve().parent.parent.parent
-log_directory = project_root / "var" / "logs"
+    log_level = settings.log_level.upper()
+    log_json = settings.log_json
 
-# Ensure the logs directory exists, creating it if necessary
-log_directory.mkdir(parents=True, exist_ok=True)
+    logger.remove()
+    logger.add(sys.stderr, level=log_level, serialize=log_json)
 
-# Set the absolute path for the log file
-log_file_path = log_directory / "app.log"
+    project_root = Path(__file__).resolve().parent.parent.parent
+    log_directory = project_root / "var" / "logs"
+    log_directory.mkdir(parents=True, exist_ok=True)
 
-# Configure the logger to write to a file with rotation and retention policies
-logger.add(
-    log_file_path,
-    rotation="10 MB",
-    retention="10 days",
-    level=log_level,
-    serialize=log_json
-)
+    logger.add(
+        log_directory / "app.log",
+        rotation="10 MB",
+        retention="10 days",
+        level=log_level,
+        serialize=log_json,
+    )
+
+
+configure_logging()

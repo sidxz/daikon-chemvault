@@ -1,58 +1,46 @@
-from sqlalchemy import text  
-from app.db.base import engine  
+"""Database initialization helpers."""
+
+from sqlalchemy import text
+
 from app.core.logging_config import logger
+from app.db.session import engine
 
-async def initialize_db():
-    """
-    Sets up the database by creating necessary extensions and tables if they don't exist.
 
-    Returns:
-        None
-    """
+async def _enable_postgres_extensions(conn) -> None:
+    rdkit_enabled = await conn.execute(
+        text("SELECT 1 FROM pg_extension WHERE extname = 'rdkit'")
+    )
+    if rdkit_enabled.scalar() is None:
+        logger.info("RDKit extension is not active. Activating now.")
+        await conn.execute(text("CREATE EXTENSION IF NOT EXISTS \"rdkit\";"))
+        logger.success("RDKit extension activated.")
+    else:
+        logger.info("RDKit extension is already active.")
+
+    uuid_enabled = await conn.execute(
+        text("SELECT 1 FROM pg_extension WHERE extname = 'uuid-ossp'")
+    )
+    if uuid_enabled.scalar() is None:
+        logger.info("uuid-ossp extension is not active. Activating now.")
+        await conn.execute(text("CREATE EXTENSION IF NOT EXISTS \"uuid-ossp\";"))
+        logger.success("uuid-ossp extension activated.")
+    else:
+        logger.info("uuid-ossp extension is already active.")
+
+
+async def initialize_db() -> None:
+    """Sets up database extensions when using PostgreSQL."""
+
     async with engine.begin() as conn:
         try:
-            # Check if the RDKit extension is already active
-            result = await conn.execute(
-                text("SELECT 1 FROM pg_extension WHERE extname = 'rdkit'")
-            )
-            rdkit_extension_active = result.scalar() is not None
-
-            if rdkit_extension_active:
-                logger.info("RDKit extension is already active.")
+            if engine.url.get_backend_name().startswith("postgres"):
+                await _enable_postgres_extensions(conn)
             else:
-                logger.info("RDKit extension is not active. Activating now.")
-                await conn.execute(
-                    text(
-                        """
-                        CREATE EXTENSION IF NOT EXISTS "rdkit";
-                        """
-                    )
+                logger.info(
+                    "Skipping PostgreSQL extension checks; non-PostgreSQL backend detected."
                 )
-                logger.success("RDKit extension activated.")
-
-            # Check if the uuid-ossp extension is already active
-            result = await conn.execute(
-                text("SELECT 1 FROM pg_extension WHERE extname = 'uuid-ossp'")
-            )
-            uuid_ossp_extension_active = result.scalar() is not None
-
-            if uuid_ossp_extension_active:
-                logger.info("uuid-ossp extension is already active.")
-            else:
-                logger.info("uuid-ossp extension is not active. Activating now.")
-                await conn.execute(
-                    text(
-                        """
-                        CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
-                        """
-                    )
-                )
-                logger.success("uuid-ossp extension activated.")
-
-            # Commit the changes
             await conn.commit()
-        except Exception as e:
-            # Rollback the transaction if there is an error
+        except Exception as exc:  # pragma: no cover - defensive logging
             await conn.rollback()
-            logger.error(f"Error initializing database extensions: {e}")
-            raise e  # Re-raise the exception to handle it in the calling code
+            logger.error(f"Error initializing database extensions: {exc}")
+            raise

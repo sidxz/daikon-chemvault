@@ -23,7 +23,7 @@ from app.utils.molecules import fp_gen
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.ext.asyncio import create_async_engine
-from app.core.config import settings
+from app.core.settings import settings
 from chembl_structure_pipeline import standardizer
 import datamol as dm
 import re
@@ -33,7 +33,7 @@ from app.services.molecule.registration_helpers import _name_key, _split_synonym
 semaphore = asyncio.Semaphore(30)
 
 # Async engine creation
-engine = create_async_engine(settings.DATABASE_URL, pool_size=100, max_overflow=150)
+engine = create_async_engine(settings.database_url, pool_size=100, max_overflow=150)
 
 
 # Session generator with proper type hint
