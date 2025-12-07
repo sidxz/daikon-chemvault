@@ -1,4 +1,4 @@
-from pydantic import BaseModel, Field, UUID4
+from pydantic import BaseModel, ConfigDict, Field, UUID4
 from typing import Optional
 
 
@@ -56,7 +56,5 @@ class ParentMoleculeUpdate(ParentMoleculeBase):
 # Schema for reading a molecule from the database, includes the ID
 class ParentMoleculeRead(ParentMoleculeBase):
     id: UUID4
-    
 
-    class Config:
-        orm_mode = True
+    model_config = ConfigDict(from_attributes=True)

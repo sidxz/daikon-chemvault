@@ -1,4 +1,4 @@
-from pydantic import BaseModel, UUID4, Field
+from pydantic import BaseModel, ConfigDict, UUID4, Field
 from typing import Optional, List
 
 class PainsBase(BaseModel):
@@ -26,5 +26,4 @@ class PainsRead(PainsBase):
     """
     Schema for reading PAINS data from the database.
     """
-    class Config:
-        orm_mode = True
+    model_config = ConfigDict(from_attributes=True)

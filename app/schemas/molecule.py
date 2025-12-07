@@ -1,4 +1,4 @@
-from pydantic import BaseModel, Field, UUID4
+from pydantic import BaseModel, ConfigDict, Field, UUID4
 from typing import Optional
 
 from app.schemas.pains import PainsRead
@@ -67,5 +67,4 @@ class MoleculeRead(MoleculeBase):
     mol: Optional[str] = None  # You may need a custom serialization for MolType
     pains: Optional[PainsRead] = None  # Include PAINS data in the response
 
-    class Config:
-        orm_mode = True
+    model_config = ConfigDict(from_attributes=True)

@@ -4,7 +4,7 @@ from sqlalchemy.future import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import sessionmaker
 from typing import Dict, List, AsyncGenerator
-from app.core.settings import settings
+from app.core.settings import get_settings
 from app.db.models.molecule import Molecule
 from app.core.logging_config import logger
 from chembl_structure_pipeline import standardizer
@@ -21,8 +21,17 @@ BATCH_SIZE = 1000
 
 load_dotenv()
 
+settings = get_settings()
+
 # Create an async engine for database operations
-engine = create_async_engine(settings.database_url, pool_size=100, max_overflow=150)
+engine = create_async_engine(
+    settings.database.url,
+    pool_size=settings.database.pool_size,
+    max_overflow=settings.database.max_overflow,
+    pool_timeout=settings.database.pool_timeout,
+    pool_recycle=settings.database.pool_recycle,
+    echo=settings.database.echo,
+)
 
 # Database session generator
 async def get_db() -> AsyncGenerator[AsyncSession, None]:
