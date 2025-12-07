@@ -41,7 +41,7 @@ class LoggingSettings(BaseModel):
     """Logging configuration."""
 
     level: str = Field(default="INFO", validation_alias=AliasChoices("LOGGING__LEVEL", "LOG_LEVEL"))
-    json_output: bool = Field(default=False, validation_alias=AliasChoices("LOGGING__JSON", "LOG_JSON"))
+    json: bool = Field(default=False, validation_alias=AliasChoices("LOGGING__JSON", "LOG_JSON"))
     rotation: str = Field(default="10 MB")
     retention: str = Field(default="10 days")
     directory: Path = Field(default=Path("var") / "logs")
@@ -66,7 +66,6 @@ class SecuritySettings(BaseModel):
 class Settings(BaseSettings):
     """Application configuration loaded from the environment."""
 
-    database_url: str | None = Field(default=None, validation_alias=AliasChoices("DATABASE__URL", "DATABASE_URL"))
     app: AppSettings = AppSettings()
     database: DatabaseSettings = DatabaseSettings()
     logging: LoggingSettings = LoggingSettings()
@@ -78,11 +77,6 @@ class Settings(BaseSettings):
         extra="ignore",
         case_sensitive=False,
     )
-
-    def model_post_init(self, __context):
-        if self.database_url:
-            self.database.url = self.database_url
-        super().model_post_init(__context)
 
 
 @lru_cache()

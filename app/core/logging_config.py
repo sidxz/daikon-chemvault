@@ -13,7 +13,7 @@ def configure_logging() -> None:
 
     settings = get_settings()
     log_level = settings.logging.level.upper()
-    log_json = settings.logging.json_output
+    log_json = settings.logging.json
 
     logger.remove()
     logger.add(sys.stderr, level=log_level, serialize=log_json)
