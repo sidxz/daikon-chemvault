@@ -367,7 +367,7 @@ async def get_molecules_by_smiles(db: AsyncSession, smiles_list: List[str]):
         db_molecules = result.scalars().all()
         if not db_molecules:
             logger.debug(f"No molecules found for provided SMILES list")
-            return None
+            return []
         logger.debug(f"Fetched {len(db_molecules)} molecules successfully")
         return db_molecules
     except ValueError as ve:

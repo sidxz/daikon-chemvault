@@ -241,11 +241,6 @@ async def read_molecules_by_smiles_list(
     try:
         logger.info(f"Fetching molecules with SMILES list: {smiles_list}")
         db_molecules = await get_molecules_by_smiles(db=db, smiles_list=smiles_list)
-        if not db_molecules:
-            logger.warning(f"No molecules found for provided SMILES list")
-            raise HTTPException(
-                status_code=404, detail=f"No molecules found for provided SMILES list"
-            )
         logger.debug(f"Molecules fetched successfully: {db_molecules}")
         return db_molecules
     except ValueError as ve:
