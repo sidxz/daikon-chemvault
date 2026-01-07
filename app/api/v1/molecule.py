@@ -197,9 +197,8 @@ async def read_molecules_by_names_or_synonyms_exact(
         db_molecules = await get_molecules_by_name_exact(db=db, names=names)
         if not db_molecules:
             logger.warning(f"No molecules found for names or synonyms: {names}")
-            raise HTTPException(
-                status_code=404, detail=f"No molecules found for names or synonyms: {names}"
-            )
+            # return empty list instead of raising 404
+            return []
         logger.debug(f"Molecules fetched successfully: {db_molecules}")
         return db_molecules
     except ValueError as ve:
