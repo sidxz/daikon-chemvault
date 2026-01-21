@@ -1,6 +1,9 @@
 from typing import List, Optional
 from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, Query, BackgroundTasks
+from fastapi.encoders import jsonable_encoder
+import json
+
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.db.base import SessionLocal
 from app.repositories import molecule as molecule_repo
@@ -187,8 +190,11 @@ async def read_molecule_by_name_exact(name: str, db: AsyncSession = Depends(get_
     except Exception as e:
         logger.error(f"Error fetching molecule with name {name}: {e}")
         raise HTTPException(status_code=500, detail="Internal Server Error")
-    
-@router.post("/get-molecules-by-name-or-synonym-exact", response_model=List[MoleculeBase])
+
+
+@router.post(
+    "/get-molecules-by-name-or-synonym-exact", response_model=List[MoleculeBase]
+)
 async def read_molecules_by_names_or_synonyms_exact(
     names: List[str], db: AsyncSession = Depends(get_db)
 ):
@@ -489,13 +495,21 @@ async def substructure_search_all(
 
 # Batch
 @router.post("/batch", response_model=List[MoleculeBase])
-async def create_molecules_batch(molecules: List[InputMoleculeDto]):
+async def create_molecules_batch(
+    molecules: List[InputMoleculeDto], preview_mode: bool = False
+):
     try:
-        logger.info(f"Creating batch of {len(molecules)} molecules")
+        logger.info(
+            f"Creating batch of {len(molecules)} molecules with preview mode set to {preview_mode}"
+        )
 
-        result = await batch_registration.register_molecules_batch(molecules)
-
-        logger.debug(f"Batch creation successful for {len(molecules)} molecules")
+        result = await batch_registration.register_molecules_batch(
+            molecules, preview_mode=preview_mode
+        )
+        if not preview_mode:
+            logger.debug(f"Batch creation successful for {len(molecules)} molecules")
+        payload = jsonable_encoder(result)
+        json.dumps(payload)  # will raise the exact non-serializable type
         return result
 
     except ValueError as ve:

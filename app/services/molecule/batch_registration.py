@@ -29,6 +29,7 @@ import datamol as dm
 import re
 from app.repositories import pains as pains_repo
 from app.services.molecule.registration_helpers import _name_key, _split_synonyms_csv
+from app.schemas.molecule import MoleculeBase
 
 semaphore = asyncio.Semaphore(30)
 
@@ -192,8 +193,23 @@ async def filter_conflicting_name_structure(
     return final
 
 
-async def register_molecules_batch(input_molecules: List[InputMoleculeDto]):
-    logger.info(f"Received batch of {len(input_molecules)} molecules")
+async def register_molecules_batch(
+    input_molecules: List[InputMoleculeDto], preview_mode: bool = False
+):
+    """
+    Register a batch of molecules:
+    1. Standardize molecules.
+    2. Enforce name–structure consistency.
+    3. Consolidate duplicates within the batch.
+    4. Check against existing molecules in the database.
+    5. Bulk insert new molecules.
+    6. Bulk update existing molecules with new synonyms.
+    7. Perform PAINS detection on newly registered molecules.
+    """
+
+    logger.info(
+        f"Received batch of {len(input_molecules)} molecules with preview mode set to {preview_mode}."
+    )
 
     validated_molecules = validate_input_molecules(input_molecules)
     if not validated_molecules:
@@ -217,11 +233,26 @@ async def register_molecules_batch(input_molecules: List[InputMoleculeDto]):
                 await filter_existing_molecules(consolidated_molecules, db)
             )
 
-            if molecules_to_register:
+            if preview_mode:
+                logger.info(
+                    f"Preview mode: {len(molecules_to_register)} molecules would be registered, "
+                    f"{len(molecules_to_update)} molecules would be updated."
+                )
+                preview_results = (
+                    molecules_to_register + molecules_to_update + not_changed_molecules
+                )
+                orm_detached_payload = [
+                    MoleculeBase.model_validate(m, from_attributes=True)
+                    for m in preview_results
+                ]
+                await db.rollback()  # important: clears dirty state
+                return orm_detached_payload
+
+            if molecules_to_register and not preview_mode:
                 await bulk_insert_molecules(molecules_to_register, db)
                 await perform_pains_detection(molecules_to_register, db)
 
-            if molecules_to_update:
+            if molecules_to_update and not preview_mode:
                 await bulk_update_molecules(molecules_to_update, db)
 
             logger.info(

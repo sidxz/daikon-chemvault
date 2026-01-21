@@ -21,5 +21,11 @@
     "standardizer",
     "tpsa"
   ],
-  "python.pythonPath": "/Users/sidx/.local/share/virtualenvs/daikon-chemvault-api-7WWHIlj8/bin/python"
+  "python.pythonPath": "/Users/sidx/.local/share/virtualenvs/daikon-chemvault-api-7WWHIlj8/bin/python",
+  "[python]": {
+    "editor.defaultFormatter": "geecode.geecode-python",
+    "editor.formatOnSave": true,
+  },
+  "python.formatting.provider": "black",
+  "python.analysis.autoImportCompletions": true
 }
