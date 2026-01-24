@@ -3,7 +3,7 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, Query, BackgroundTasks
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.db.base import SessionLocal
-
+import pandas as pd
 from app.core.logging_config import logger
 
 
@@ -18,6 +18,12 @@ async def get_db():
         finally:
             await db.close()
 
-@router.get("/version")
-async def version():
-    return {"version": "1.2.1"}
+
+@router.get("/health")
+async def health():
+    return {
+        "service": "chemvault-api",
+        "versionName": "rc-2",
+        "timestamp": pd.Timestamp.now().isoformat(),
+        "version": "1.5.0",
+    }
