@@ -1,0 +1,27 @@
+flowchart TD
+
+A["Input: List[InputMoleculeDto]"] --> B["validate_input_molecules"]
+B -->|invalid SMILES removed| C["validated_molecules"]
+
+C --> D["standardize_molecules (async)"]
+D -->|filter None| E["standardized_molecules"]
+
+E --> F["filter_conflicting_name_structure"]
+F -->|skip name↔structure conflicts<br/>log warnings| G["cleaned_standardized_molecules"]
+
+G --> H["consolidate_duplicates<br/>(group by smiles_canonical)"]
+H --> I["consolidated_molecules"]
+
+I --> J["filter_existing_molecules"]
+J --> J1["molecules_to_update"]
+J --> J2["molecules_to_register"]
+J --> J3["not_changed_molecules"]
+
+J2 --> K["bulk_insert_molecules"]
+K --> L["perform_pains_detection on new"]
+
+J1 --> M["bulk_update_molecules"]
+
+L --> N["return: registered + updated + unchanged"]
+M --> N
+J3 --> N

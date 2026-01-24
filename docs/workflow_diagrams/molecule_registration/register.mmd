@@ -1,0 +1,50 @@
+flowchart TD
+
+A["Start register(input_molecule, db)"] --> B["Log: Registering molecule"]
+B --> C["standardize(input_molecule)"]
+C --> D["standardized_molecule"]
+
+D --> E["get_molecule_by_name_exact(db, input_molecule.name)"]
+E --> F["get_molecule_by_smiles(db, standardized_molecule.smiles_canonical)"]
+
+F --> G["Check: existing_molecule_by_name present AND structure different?"]
+G -->|Yes| H["Log error: name conflict and raise ValueError"]
+G -->|No| I["Check: existing_molecule (same structure) exists?"]
+
+I -->|Yes| J["Log: Molecule already exists"]
+J --> K["handle_molecule_name(existing_molecule, input_molecule.name, db)"]
+K --> L["Return existing_molecule"]
+
+I -->|No| M["Log: Will create new molecule"]
+
+M --> N["Check: input_molecule.id is valid UUID?"]
+N -->|Yes| O["Use provided UUID as molecule_id"]
+N -->|No| P["Generate new UUID as molecule_id"]
+O --> Q["Assign standardized_molecule.id = molecule_id"]
+P --> Q
+
+Q --> R["get_parent_molecule(db, standardized_molecule.o_molblock)"]
+R --> S["Check: parent_molecule found?"]
+
+S -->|Yes| T["Set standardized_molecule.parent_id = parent_molecule.id"]
+S -->|No| U["Log: Parent not found, registering parent"]
+U --> V["standardize_parent(standardized_molecule.o_molblock)"]
+V --> W["Generate new UUID for parent_molecule"]
+W --> X["Set parent.name = input_molecule.name"]
+X --> Y["create_parent_molecule(db, standardized_parent_molecule)"]
+Y --> Z["Set standardized_molecule.parent_id = new_parent_molecule.id"]
+
+T --> AA["create_molecule(db, standardized_molecule)"]
+Z --> AA
+
+AA --> AB["Try: detect_pains([standardized_molecule])"]
+AB --> AC["Check: pains_results present?"]
+
+AC -->|Yes| AD["Build PainsCreate and create_pains(db, pains_entry)"]
+AC -->|No| AE["Log: No PAINS detected"]
+
+AB --> AF["On exception: Log PAINS detection error"]
+
+AD --> AG["Return standardized_molecule"]
+AE --> AG
+AF --> AG

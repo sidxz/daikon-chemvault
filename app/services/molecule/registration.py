@@ -22,9 +22,26 @@ async def register(input_molecule: InputMoleculeDto, db: AsyncSession):
         # Step 1: Standardize the molecule
         standardized_molecule = standardize(input_molecule)
 
+        # Check name uniqueness
+        existing_molecule_by_name = await molecule_repo.get_molecule_by_name_exact(
+            db, input_molecule.name
+        )
         existing_molecule = await get_molecule_by_smiles(
             db, standardized_molecule.smiles_canonical
         )
+
+        # [New] Reject if name is same but smiles_canonical is different
+        if existing_molecule_by_name and (
+            not existing_molecule
+            or existing_molecule.id != existing_molecule_by_name.id
+        ):
+            logger.error(
+                f"Molecule name conflict: {input_molecule.name} already exists with different structure."
+            )
+            raise ValueError(
+                f"Molecule name '{input_molecule.name}' already exists with a different structure."
+            )
+
         # Check if the molecule already exists in the database
         if existing_molecule:
             logger.info(f"Molecule already exists in the database: {existing_molecule}")
@@ -79,10 +96,12 @@ async def register(input_molecule: InputMoleculeDto, db: AsyncSession):
             standardized_molecule.parent_id = new_parent_molecule.id
 
         new_molecule = await molecule_repo.create_molecule(db, standardized_molecule)
-        
+
         # Step 4: Check for PAINS and store results
         try:
-            pains_results = detect_pains([standardized_molecule])  # Call PAINS detection
+            pains_results = detect_pains(
+                [standardized_molecule]
+            )  # Call PAINS detection
             if pains_results:
                 pains_entry = PainsCreate(
                     id=standardized_molecule.id,
@@ -94,8 +113,9 @@ async def register(input_molecule: InputMoleculeDto, db: AsyncSession):
             else:
                 logger.info(f"No PAINS detected for Molecule ID: {molecule_id}")
         except Exception as e:
-            logger.error(f"Error during PAINS detection for Molecule ID {molecule_id}: {e}")
-
+            logger.error(
+                f"Error during PAINS detection for Molecule ID {molecule_id}: {e}"
+            )
 
         return standardized_molecule
 
@@ -105,34 +125,55 @@ async def register(input_molecule: InputMoleculeDto, db: AsyncSession):
         logger.error(f"Error processing molecule: {e}")
         raise Exception("Internal error")
 
+def _syn_key(s: str) -> str:
+    # same as query: strip, lower, remove all spaces
+    return s.strip().lower().replace(" ", "")
 
 async def handle_molecule_name(
     existing_molecule, input_molecule_name: str, db: AsyncSession
 ):
     """Handle molecule name and synonyms if the name doesn't match or is not in synonyms."""
-    if existing_molecule.name != input_molecule_name:
+    if not input_molecule_name:
+        return existing_molecule
 
-        # Ensure that the synonyms are split into a list
-        existing_synonyms = (
-            existing_molecule.synonyms.split(",") if existing_molecule.synonyms else []
+    raw_input = input_molecule_name
+    input_name_norm = raw_input.strip()
+    input_key = _syn_key(raw_input)
+
+    # If the *existing* primary name matches under the same normalization, do nothing
+    if existing_molecule.name:
+        if _syn_key(existing_molecule.name) == input_key:
+            return existing_molecule
+
+    # Build a map of normalized_key -> original_token for synonyms
+    syn_map = {}
+
+    if existing_molecule.synonyms:
+        raw_synonyms = existing_molecule.synonyms.split(",")
+        for s in raw_synonyms:
+            s_clean = s.strip()
+            if not s_clean:
+                continue
+            key = _syn_key(s_clean)
+            # keep first encountered representation
+            syn_map.setdefault(key, s_clean)
+
+    # If this name (under normalized key) is not already a synonym, add it
+    if input_key not in syn_map:
+        logger.info(
+            f"Input name '{input_molecule_name}' not found in synonyms. Adding it."
         )
+        syn_map[input_key] = input_name_norm
 
-        # Add the input molecule name to the synonyms if it is not already present
-        if input_molecule_name not in existing_synonyms:
-            logger.info(
-                f"Input name '{input_molecule_name}' not found in synonyms. Adding it."
-            )
-            existing_synonyms.append(input_molecule_name)
-            # sort the synonyms
-            existing_synonyms.sort()
-            unique_synonyms = sorted(set(existing_synonyms))
-            existing_molecule.synonyms = ",".join(unique_synonyms)
+        # Canonical storage: sort by display token, join with commas (no spaces)
+        new_synonyms_sorted = sorted(syn_map.values())
+        existing_molecule.synonyms = ",".join(new_synonyms_sorted)
 
-            # Update the molecule with the new synonyms
-            update_molecule = MoleculeUpdate(
-                id=existing_molecule.id,
-                name=existing_molecule.name,
-                synonyms=existing_molecule.synonyms
-            )
-            await molecule_repo.update_molecule(db, update_molecule.id, update_molecule)
+        update_molecule = MoleculeUpdate(
+            id=existing_molecule.id,
+            name=existing_molecule.name,
+            synonyms=existing_molecule.synonyms,
+        )
+        await molecule_repo.update_molecule(db, update_molecule.id, update_molecule)
+
     return existing_molecule

@@ -18,6 +18,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.sql import text, or_
 from typing import List, Dict, Any, Tuple
 from sqlalchemy.orm import selectinload
+from sqlalchemy import select, or_, func
 
 
 def generate_filter_conditions(filters: Dict[str, Any]) -> Tuple[str, Dict[str, Any]]:
@@ -225,40 +226,98 @@ async def get_molecule_by_name(
         logger.error(f"Error fetching molecules with name {name}: {e}")
         raise HTTPException(status_code=500, detail="Internal Server Error")
 
-#TODO: BUG Molecule.synonyms.in_(names) would never match since synonyms is a string field
+
 async def get_molecule_by_name_exact(db: AsyncSession, name: str):
     try:
         logger.info(f"Fetching molecule with name: {name}")
-        result = await db.execute(
-            select(Molecule).filter(
-                or_(Molecule.name == name, Molecule.synonyms == name)
-            )
+
+        # Normalize search term: lower + strip + remove spaces
+        q_raw = name or ""
+        q = q_raw.strip().lower()
+        q_no_space = q.replace(" ", "")
+
+        # Base name condition (case-insensitive, keep spaces)
+        name_condition = func.lower(Molecule.name) == q
+
+        # Normalize synonyms: coalesce NULL -> '', lower, remove spaces
+        synonyms_normalized = func.replace(
+            func.lower(func.coalesce(Molecule.synonyms, "")),
+            " ",
+            "",
         )
-        db_molecule = result.scalar()
+
+        # Wrap with commas so we match whole tokens in the CSV
+        synonym_condition = func.concat(",", synonyms_normalized, ",").like(
+            f"%,{q_no_space},%"
+        )
+
+        stmt = select(Molecule).where(or_(name_condition, synonym_condition))
+
+        result = await db.execute(stmt)
+        db_molecule = result.scalars().first()
+
         if not db_molecule:
             logger.info(f"Molecule with name {name} not found")
             return None
+
         logger.debug(f"Molecule fetched successfully: {db_molecule}")
         return db_molecule
+
     except Exception as e:
         logger.error(f"Error fetching molecule with name {name}: {e}")
         raise HTTPException(status_code=500, detail="Internal Server Error")
 
-#TODO: BUG Molecule.synonyms.in_(names) would never match since synonyms is a string field
+
 async def get_molecules_by_name_exact(db: AsyncSession, names: List[str]):
     try:
         logger.info(f"Fetching molecules with names: {names}")
-        result = await db.execute(
-            select(Molecule).filter(
-                or_(Molecule.name.in_(names), Molecule.synonyms.in_(names))
-            )
+
+        if not names:
+            logger.info("Empty name list passed to get_molecules_by_name_exact")
+            return None
+
+        # Normalize input names
+        normalized_raw = [n for n in names if n and isinstance(n, str) and n.strip()]
+
+        if not normalized_raw:
+            logger.info("No valid names after normalization")
+            return None
+
+        lowered = [n.strip().lower() for n in normalized_raw]
+        lowered_no_space = [n.replace(" ", "") for n in lowered]
+
+        # 1. Match name column (case-insensitive)
+        name_condition = func.lower(Molecule.name).in_(lowered)
+
+        # 2. Prepare normalized synonyms column
+        #    - coalesce NULL → ""
+        #    - lowercase
+        #    - remove all spaces
+        synonyms_normalized = func.replace(
+            func.lower(func.coalesce(Molecule.synonyms, "")),
+            " ",
+            "",
         )
+
+        # 3. Build LIKE conditions for each name against normalized synonyms
+        synonym_conditions = [
+            func.concat(",", synonyms_normalized, ",").like(f"%,{q},%")
+            for q in lowered_no_space
+        ]
+
+        # Final query: match name OR any synonym token
+        stmt = select(Molecule).where(or_(name_condition, *synonym_conditions))
+
+        result = await db.execute(stmt)
         db_molecules = result.scalars().all()
+
         if not db_molecules:
             logger.info(f"No molecules found for names: {names}")
             return None
+
         logger.debug(f"Molecules fetched successfully: {db_molecules}")
         return db_molecules
+
     except Exception as e:
         logger.error(f"Error fetching molecules with names {names}: {e}")
         raise HTTPException(status_code=500, detail="Internal Server Error")
@@ -308,7 +367,7 @@ async def get_molecules_by_smiles(db: AsyncSession, smiles_list: List[str]):
         db_molecules = result.scalars().all()
         if not db_molecules:
             logger.debug(f"No molecules found for provided SMILES list")
-            return None
+            return []
         logger.debug(f"Fetched {len(db_molecules)} molecules successfully")
         return db_molecules
     except ValueError as ve:
