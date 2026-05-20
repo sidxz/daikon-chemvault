@@ -1,5 +1,5 @@
 from fastapi import FastAPI, Request
-from app.api.v1 import batch, config, molcal, molecule  # Import the router for molecule-related endpoints
+from app.api.v1 import admet, batch, config, molcal, molecule  # Import the router for molecule-related endpoints
 from app.core.logging_config import logger  # Import the configured logger
 from dotenv import load_dotenv
 from contextlib import asynccontextmanager
@@ -37,3 +37,5 @@ app.include_router(molcal.router, prefix="/molcal", tags=["molcal"])
 app.include_router(config.router, prefix="/config", tags=["config"])
 
 app.include_router(batch.router, prefix="/batch", tags=["batch"])
+
+app.include_router(admet.router, prefix="/admet", tags=["admet"])

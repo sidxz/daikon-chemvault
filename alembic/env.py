@@ -9,6 +9,7 @@ from app.db.base import Base
 from app.db.models.molecule import Molecule
 from app.db.models.parent_molecule import ParentMolecule
 from app.db.models.pains import Pains
+from app.db.models.admet_prediction import AdmetPrediction
 
 import os
 
