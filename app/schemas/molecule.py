@@ -2,6 +2,7 @@ from pydantic import BaseModel, Field, UUID4
 from typing import Optional
 
 from app.schemas.pains import PainsRead
+from app.schemas.admet_dto import AdmetPredictionDto
 
 
 # Base schema for shared attributes between create, update, and read operations
@@ -66,6 +67,7 @@ class MoleculeRead(MoleculeBase):
     morgan_fp: Optional[str] = None  # You may need a custom serialization for BfpType
     mol: Optional[str] = None  # You may need a custom serialization for MolType
     pains: Optional[PainsRead] = None  # Include PAINS data in the response
+    admet_prediction: Optional[AdmetPredictionDto] = None  # Include ADMET predictions
 
     class Config:
         orm_mode = True

@@ -24,8 +24,27 @@ from app.repositories.molecule import (
 )
 from app.services.molecule.batch_registration_parent import process_all_molecule_batches
 from app.services.molecule.similarity import find_similar_molecules
+from app.services.admet.runner import INLINE_TRIGGER_CHUNK_SIZE, run_admet_predictions
 
 router = APIRouter()
+
+
+def _enqueue_admet(background_tasks: BackgroundTasks, items):
+    """Fan-enqueue ADMET predictions for newly-created molecules.
+
+    Splits into chunks of INLINE_TRIGGER_CHUNK_SIZE so a single huge batch
+    registration doesn't pin the in-process background worker on one giant
+    inference call. Silent no-op for empty input.
+    """
+    if not items:
+        return
+    for start in range(0, len(items), INLINE_TRIGGER_CHUNK_SIZE):
+        chunk = items[start : start + INLINE_TRIGGER_CHUNK_SIZE]
+        background_tasks.add_task(run_admet_predictions, chunk)
+    logger.info(
+        f"Enqueued ADMET for {len(items)} newly-registered molecules "
+        f"({(len(items) + INLINE_TRIGGER_CHUNK_SIZE - 1) // INLINE_TRIGGER_CHUNK_SIZE} chunk(s))."
+    )
 
 
 # Dependency to get the database session
@@ -39,13 +58,16 @@ async def get_db():
 
 @router.post("/", response_model=MoleculeBase)
 async def create_molecule(
-    molecule: InputMoleculeDto, db: AsyncSession = Depends(get_db)
+    molecule: InputMoleculeDto,
+    background_tasks: BackgroundTasks,
+    db: AsyncSession = Depends(get_db),
 ):
     try:
         logger.info(f"Creating a new molecule with data: {molecule.model_dump()}")
-        # result = await molecule_repo.create_molecule(db=db, molecule=molecule)
-        result = await registration.register(molecule, db)
-        logger.debug(f"Molecule created successfully: {result}")
+        result, is_new = await registration.register(molecule, db)
+        logger.debug(f"Molecule created successfully (is_new={is_new}): {result}")
+        if is_new and getattr(result, "smiles_canonical", None):
+            _enqueue_admet(background_tasks, [(result.id, result.smiles_canonical)])
         return result
 
     except ValueError as ve:
@@ -496,18 +518,21 @@ async def substructure_search_all(
 # Batch
 @router.post("/batch", response_model=List[MoleculeBase])
 async def create_molecules_batch(
-    molecules: List[InputMoleculeDto], preview_mode: bool = False
+    molecules: List[InputMoleculeDto],
+    background_tasks: BackgroundTasks,
+    preview_mode: bool = False,
 ):
     try:
         logger.info(
             f"Creating batch of {len(molecules)} molecules with preview mode set to {preview_mode}"
         )
 
-        result = await batch_registration.register_molecules_batch(
+        result, newly_created = await batch_registration.register_molecules_batch(
             molecules, preview_mode=preview_mode
         )
         if not preview_mode:
             logger.debug(f"Batch creation successful for {len(molecules)} molecules")
+            _enqueue_admet(background_tasks, newly_created)
         payload = jsonable_encoder(result)
         json.dumps(payload)  # will raise the exact non-serializable type
         return result
