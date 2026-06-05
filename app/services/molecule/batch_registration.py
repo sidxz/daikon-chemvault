@@ -1,5 +1,6 @@
 import asyncio
-from typing import List, Dict, AsyncGenerator
+from typing import List, Dict, AsyncGenerator, Tuple
+from uuid import UUID
 import uuid
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -195,7 +196,7 @@ async def filter_conflicting_name_structure(
 
 async def register_molecules_batch(
     input_molecules: List[InputMoleculeDto], preview_mode: bool = False
-):
+) -> Tuple[list, List[Tuple[UUID, str]]]:
     """
     Register a batch of molecules:
     1. Standardize molecules.
@@ -205,6 +206,13 @@ async def register_molecules_batch(
     5. Bulk insert new molecules.
     6. Bulk update existing molecules with new synonyms.
     7. Perform PAINS detection on newly registered molecules.
+
+    Returns (combined_response, newly_created), where:
+      - combined_response is the same union of registered + updated + unchanged
+        molecules that callers expect (or the preview-mode equivalent),
+      - newly_created is [(id, smiles_canonical), …] for molecules that were
+        actually inserted in this call. Empty in preview mode, on early return,
+        and on exception paths. Handlers use this to gate ADMET side effects.
     """
 
     logger.info(
@@ -214,7 +222,7 @@ async def register_molecules_batch(
     validated_molecules = validate_input_molecules(input_molecules)
     if not validated_molecules:
         logger.warning("No valid molecules found after validation.")
-        return []
+        return [], []
 
     async for db in get_db():
         try:
@@ -246,7 +254,7 @@ async def register_molecules_batch(
                     for m in preview_results
                 ]
                 await db.rollback()  # important: clears dirty state
-                return orm_detached_payload
+                return orm_detached_payload, []
 
             if molecules_to_register and not preview_mode:
                 await bulk_insert_molecules(molecules_to_register, db)
@@ -259,12 +267,20 @@ async def register_molecules_batch(
                 f"Successfully registered {len(molecules_to_register)} molecules, "
                 f"updated {len(molecules_to_update)} molecules."
             )
-            return molecules_to_register + molecules_to_update + not_changed_molecules
+            newly_created = [
+                (m.id, m.smiles_canonical)
+                for m in molecules_to_register
+                if m.smiles_canonical
+            ]
+            return (
+                molecules_to_register + molecules_to_update + not_changed_molecules,
+                newly_created,
+            )
 
         except Exception as e:
             logger.error(f"Unexpected error in molecule registration: {e}")
             await db.rollback()
-            return []
+            return [], []
 
 
 async def perform_pains_detection(molecules: List[Molecule], db: AsyncSession):

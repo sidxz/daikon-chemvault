@@ -1,4 +1,5 @@
 import uuid
+from typing import Tuple
 from app.repositories import molecule as molecule_repo
 from app.repositories import pains as pains_repo
 
@@ -14,8 +15,14 @@ from app.repositories.molecule import get_molecule_by_smiles
 from app.repositories import parent_molecule as parent_molecule_repo
 
 
-async def register(input_molecule: InputMoleculeDto, db: AsyncSession):
-    """Handle standardization and creation of a molecule."""
+async def register(input_molecule: InputMoleculeDto, db: AsyncSession) -> Tuple[object, bool]:
+    """Handle standardization and creation of a molecule.
+
+    Returns (molecule, is_new) where is_new is True only when a new row was
+    actually inserted. Callers use is_new to gate post-create side effects
+    such as ADMET prediction; existing-molecule lookups (even those that
+    merge synonyms) return is_new=False.
+    """
     try:
         logger.info(f"Registering molecule: {input_molecule.model_dump()}")
 
@@ -53,7 +60,7 @@ async def register(input_molecule: InputMoleculeDto, db: AsyncSession):
                 logger.error(f"Error handling molecule name: {e}")
                 raise Exception("Internal error")
             finally:
-                return existing_molecule
+                return existing_molecule, False
 
         logger.info(
             f"Will create a new molecule: {standardized_molecule.smiles_canonical}"
@@ -117,7 +124,7 @@ async def register(input_molecule: InputMoleculeDto, db: AsyncSession):
                 f"Error during PAINS detection for Molecule ID {molecule_id}: {e}"
             )
 
-        return standardized_molecule
+        return standardized_molecule, True
 
     except ValueError as ve:
         raise ve
