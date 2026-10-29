@@ -77,10 +77,15 @@ def require_token(
             leeway=CLOCK_SKEW_SECONDS,
             options={"require": ["exp", "iss", "aud"]},
         )
-        # Microsoft.Identity.Web accepts only access tokens with scp (delegated) or roles (app-only),
-        # which keeps ID tokens out. DAIKON's KeyCloak path has no such check.
-        if settings.OIDCProvider == "EntraID" and not claims.get("scp") and not claims.get("roles"):
-            raise jwt.InvalidTokenError("Token has neither scp nor roles")
+        # Accept access tokens only, as DAIKON does: ID and Logout tokens are signed with the same keys and can
+        # carry the same audience.
+        if settings.OIDCProvider == "EntraID":
+            # Microsoft.Identity.Web requires scp (delegated) or roles (app-only).
+            if not claims.get("scp") and not claims.get("roles"):
+                raise jwt.InvalidTokenError("Token has neither scp nor roles")
+        elif claims.get("typ") != "Bearer":
+            # KeyCloak names the token kind in typ: allow exactly "Bearer"; "ID", "Logout" or no typ are rejected.
+            raise jwt.InvalidTokenError("Not a KeyCloak access token")
     except jwt.InvalidTokenError as e:
         logger.warning(f"Rejected bearer token: {e}")  # never log the token itself
         raise HTTPException(

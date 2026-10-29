@@ -113,14 +113,26 @@ def test_invalid_token_is_rejected(tok):
     assert r.headers["WWW-Authenticate"] == 'Bearer error="invalid_token"'
 
 
-def test_keycloak_token(monkeypatch):
-    authority = "https://keycloak.example.org/realms/daikon"
+KC_AUTHORITY = "https://keycloak.example.org/realms/daikon"
+KC_CLIENT = "daikon-web"
+
+
+@pytest.fixture
+def keycloak(monkeypatch):
+    # Audience == the frontend's client id: the configuration where ID and Logout tokens carry a matching aud too.
     monkeypatch.setattr(auth.settings, "OIDCProvider", "KeyCloak")
-    monkeypatch.setattr(auth, "ISSUERS", [authority])
-    monkeypatch.setattr(auth, "AUDIENCES", ["daikon-api"])
-    # No scp/roles check for KeyCloak, matching DAIKON; issuer and audience must be the configured ones.
-    assert cluster(token(iss=authority, aud="daikon-api", scp=None)).status_code == 200
-    assert cluster(token(aud="daikon-api", scp=None)).status_code == 401
+    monkeypatch.setattr(auth, "ISSUERS", [KC_AUTHORITY])
+    monkeypatch.setattr(auth, "AUDIENCES", [KC_CLIENT])
+
+
+@pytest.mark.parametrize("typ,status", [("Bearer", 200), ("ID", 401), ("Logout", 401), (None, 401), ("bearer", 401)])
+def test_keycloak_accepts_only_access_tokens(keycloak, typ, status):
+    # No scp/roles on KeyCloak tokens, matching DAIKON; typ must be exactly "Bearer".
+    assert cluster(token(iss=KC_AUTHORITY, aud=KC_CLIENT, scp=None, typ=typ)).status_code == status
+
+
+def test_keycloak_rejects_other_issuer(keycloak):
+    assert cluster(token(aud=KC_CLIENT, scp=None, typ="Bearer")).status_code == 401
 
 
 @pytest.mark.parametrize(
