@@ -37,6 +37,7 @@ chembl-structure-pipeline = "*"
 datamol = "*"
 deepchem = "*"
 admet-ai = "*"
+pyjwt = {extras = ["crypto"], version = "*"}
 
 [dev-packages]
 black = "*"

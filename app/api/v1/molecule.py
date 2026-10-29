@@ -239,7 +239,9 @@ async def read_molecules_by_names_or_synonyms_exact(
         raise HTTPException(status_code=500, detail="Internal Server Error")
 
 
+# Trailing-slash alias: MLogix calls this path with a slash, and the 307 redirect would drop its Authorization header.
 @router.get("/by-smiles-canonical", response_model=MoleculeBase)
+@router.get("/by-smiles-canonical/", response_model=MoleculeBase, include_in_schema=False)
 async def read_molecule_by_smiles(smiles: str, db: AsyncSession = Depends(get_db)):
     try:
         logger.info(f"Fetching molecule with canonical smiles: {smiles}")
@@ -262,6 +264,7 @@ async def read_molecule_by_smiles(smiles: str, db: AsyncSession = Depends(get_db
 
 
 @router.post("/by-smiles-list", response_model=List[MoleculeBase])
+@router.post("/by-smiles-list/", response_model=List[MoleculeBase], include_in_schema=False)
 async def read_molecules_by_smiles_list(
     smiles_list: List[str], db: AsyncSession = Depends(get_db)
 ):
