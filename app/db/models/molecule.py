@@ -25,7 +25,7 @@ class Molecule(Base, WithMetadata):
     name = Column(String, index=True)
     synonyms = Column(String, index=True)
     smiles = Column(String)
-    smiles_canonical = Column(String, index=True)
+    smiles_canonical = Column(String, index=True)  # unique for new rows: uq_molecules_smiles_canonical
     selfies = Column(String)
     inchi = Column(String)
     inchi_key = Column(String)
