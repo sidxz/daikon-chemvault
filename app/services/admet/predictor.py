@@ -5,6 +5,10 @@ from app.core.logging_config import logger
 
 _model = None
 _model_lock = Lock()
+# admet_ai runs a Lightning Trainer per ensemble on the shared model, with a rich progress bar on rich's
+# global console; two predictions at once corrupt that console ("IndexError: pop from empty list").
+# ponytail: one prediction at a time; one model per worker process if ADMET throughput ever matters.
+_predict_lock = Lock()
 
 
 def _get_model():
@@ -29,7 +33,8 @@ def predict_batch(smiles_list: List[str]) -> List[Tuple[str, dict]]:
     both required for JSONB persistence via asyncpg.
     """
     model = _get_model()
-    df = model.predict(smiles=smiles_list)
+    with _predict_lock:
+        df = model.predict(smiles=smiles_list)
     records = json.loads(df.to_json(orient="records"))
     return list(zip(df.index.tolist(), records))
 
