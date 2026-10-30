@@ -1,0 +1,20 @@
+version: 2
+updates:
+  # Pipfile + Pipfile.lock. Every package is "*" in the Pipfile, so these are lockfile-only bumps.
+  - package-ecosystem: pip
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    groups:
+      python-minor-patch:
+        update-types: [minor, patch]
+
+  # Also moves the SHA pins in .github/workflows, with their version comments.
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+
+  # No docker entry: it would offer python:3.13/3.14-slim, but the Pipfile pins Python 3.12.

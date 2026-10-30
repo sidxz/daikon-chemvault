@@ -631,12 +631,13 @@ async def search_substructure_multiple(
             [f"mol @> :smiles_{i}" for i in range(len(smiles_list))]
         )
 
-        # Base SQL query with substructure conditions
+        # Base SQL query with substructure conditions. Only the OR/AND checked above and bind-parameter
+        # names are interpolated; the SMILES themselves stay bound parameters.
         sql_query = f"""
             SELECT *
             FROM molecules
             WHERE {substructure_conditions}
-        """
+        """  # noqa: S608
 
         # Generate filter conditions and parameters using the helper function
         filter_conditions, filter_params = generate_filter_conditions(filters)

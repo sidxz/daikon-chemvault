@@ -6,28 +6,16 @@ import uuid
 import jwt
 import pytest
 from cryptography.hazmat.primitives.asymmetric import rsa
-from dotenv import load_dotenv
 from fastapi.routing import APIRoute
 from fastapi.testclient import TestClient
 
-# Test tenant/app; must be set before the app (and its settings) are imported.
-TENANT = "11111111-1111-1111-1111-111111111111"
-CLIENT = "22222222-2222-2222-2222-222222222222"
-load_dotenv()
-os.environ.setdefault("DATABASE_URL", "postgresql+asyncpg://test:test@localhost:5432/test")  # never connected
-os.environ.update(
-    OIDCProvider="EntraID",
-    EntraID_Instance="https://login.microsoftonline.com/",
-    EntraID_TenantId=TENANT,
-    EntraID_ClientId=CLIENT,
-    EntraID_Audience=f"api://{CLIENT}",
-    ENABLE_DOCS="false",
-)
+from app.core import auth
+from app.core.config import Settings
+from app.main import app
+from app.middleware.security_headers import SECURITY_HEADERS
 
-from app.core import auth  # noqa: E402
-from app.core.config import Settings  # noqa: E402
-from app.main import app  # noqa: E402
-from app.middleware.security_headers import SECURITY_HEADERS  # noqa: E402
+TENANT = os.environ["EntraID_TenantId"]  # the test tenant and app registration set in conftest.py
+CLIENT = os.environ["EntraID_ClientId"]
 
 KEY = rsa.generate_private_key(public_exponent=65537, key_size=2048)
 OTHER_KEY = rsa.generate_private_key(public_exponent=65537, key_size=2048)
