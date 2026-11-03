@@ -3,11 +3,13 @@ from typing import List, Dict, AsyncGenerator, Tuple
 from uuid import UUID
 import uuid
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.logging_config import logger
 from app.db.models.molecule import Molecule
 from app.db.models.parent_molecule import ParentMolecule
 from app.repositories.molecule import (
+    SMILES_UNIQUE_INDEX,
     bulk_create_molecules,
     get_molecule_by_smiles,
     get_molecules_by_name_exact,
@@ -211,8 +213,10 @@ async def register_molecules_batch(
       - combined_response is the same union of registered + updated + unchanged
         molecules that callers expect (or the preview-mode equivalent),
       - newly_created is [(id, smiles_canonical), …] for molecules that were
-        actually inserted in this call. Empty in preview mode, on early return,
-        and on exception paths. Handlers use this to gate ADMET side effects.
+        actually inserted in this call. Empty in preview mode and on early
+        return. Handlers use this to gate ADMET side effects.
+
+    Database errors propagate (the router answers 500).
     """
 
     logger.info(
@@ -237,31 +241,51 @@ async def register_molecules_batch(
             )
             consolidated_molecules = consolidate_duplicates(standardized_molecules)
 
-            molecules_to_update, molecules_to_register, not_changed_molecules = (
-                await filter_existing_molecules(consolidated_molecules, db)
-            )
-
-            if preview_mode:
-                logger.info(
-                    f"Preview mode: {len(molecules_to_register)} molecules would be registered, "
-                    f"{len(molecules_to_update)} molecules would be updated."
+            # A concurrent registration can insert some of these structures after the check below
+            # (unique index on smiles_canonical). Then re-check: they come back as existing molecules,
+            # and this batch's names merge into their synonyms.
+            for attempt in range(3):
+                molecules_to_update, molecules_to_register, not_changed_molecules = (
+                    await filter_existing_molecules(consolidated_molecules, db)
                 )
-                preview_results = (
-                    molecules_to_register + molecules_to_update + not_changed_molecules
-                )
-                orm_detached_payload = [
-                    MoleculeBase.model_validate(m, from_attributes=True)
-                    for m in preview_results
-                ]
-                await db.rollback()  # important: clears dirty state
-                return orm_detached_payload, []
 
-            if molecules_to_register and not preview_mode:
-                await bulk_insert_molecules(molecules_to_register, db)
+                if preview_mode:
+                    logger.info(
+                        f"Preview mode: {len(molecules_to_register)} molecules would be registered, "
+                        f"{len(molecules_to_update)} molecules would be updated."
+                    )
+                    preview_results = (
+                        molecules_to_register + molecules_to_update + not_changed_molecules
+                    )
+                    orm_detached_payload = [
+                        MoleculeBase.model_validate(m, from_attributes=True)
+                        for m in preview_results
+                    ]
+                    await db.rollback()  # important: clears dirty state
+                    return orm_detached_payload, []
+
+                # Existing molecules first: filter_existing_molecules locked them, and this commit
+                # releases them.
+                if molecules_to_update:
+                    await bulk_update_molecules(molecules_to_update, db)
+
+                try:
+                    if molecules_to_register:
+                        # Same structure order in every batch: two batches inserting the same new
+                        # structures in opposite order would deadlock on the unique index.
+                        await bulk_insert_molecules(
+                            sorted(molecules_to_register, key=lambda m: m.smiles_canonical), db
+                        )
+                    break
+                except IntegrityError as e:
+                    if attempt == 2 or SMILES_UNIQUE_INDEX not in str(e.orig):
+                        raise
+                    logger.info(
+                        "Some structures were registered concurrently; re-checking to merge names."
+                    )
+
+            if molecules_to_register:
                 await perform_pains_detection(molecules_to_register, db)
-
-            if molecules_to_update and not preview_mode:
-                await bulk_update_molecules(molecules_to_update, db)
 
             logger.info(
                 f"Successfully registered {len(molecules_to_register)} molecules, "
@@ -280,7 +304,7 @@ async def register_molecules_batch(
         except Exception as e:
             logger.error(f"Unexpected error in molecule registration: {e}")
             await db.rollback()
-            return [], []
+            raise  # the router answers 500, not an empty 200 that reads as "nothing to register"
 
 
 async def perform_pains_detection(molecules: List[Molecule], db: AsyncSession):
@@ -453,7 +477,16 @@ async def get_existing_molecules_by_smiles(smiles_list: List[str], db: AsyncSess
     Query the database to find which canonical SMILES already exist in bulk.
     """
     result = await db.execute(
-        select(Molecule).where(Molecule.smiles_canonical.in_(smiles_list))
+        select(Molecule)
+        .where(Molecule.smiles_canonical.in_(smiles_list))
+        # Lock the rows this batch may merge names into, until the update commits, so concurrent
+        # batches don't overwrite each other's synonyms. A fixed lock order prevents deadlocks, and
+        # populate_existing replaces any copy loaded earlier (by the name check) with the locked one.
+        # NO KEY UPDATE, not UPDATE: a concurrent batch inserting PAINS rows for these molecules takes
+        # KEY SHARE locks on them (foreign key), which UPDATE would deadlock with.
+        .order_by(Molecule.smiles_canonical)
+        .with_for_update(key_share=True)
+        .execution_options(populate_existing=True)
     )
     existing_molecules = result.scalars().all()
     return {molecule.smiles_canonical: molecule for molecule in existing_molecules}
@@ -483,3 +516,4 @@ async def bulk_update_molecules(updated_molecules: List[Molecule], db: AsyncSess
     except Exception as e:
         logger.error(f"Error updating molecules: {str(e)}")
         await db.rollback()
+        raise  # otherwise the response lists synonyms that were never saved

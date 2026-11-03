@@ -13,7 +13,6 @@ torch = {version = "*", index = "pytorch-cpu"}
 rdkit = "*"
 fastapi = "*"
 uvicorn = "*"
-psycopg2-binary = "*"
 asyncpg = "*"
 marshmallow = "*"
 pandas = "*"
@@ -22,7 +21,6 @@ loguru = "*"
 sqlalchemy = "*"
 alembic = "*"
 pydantic = "*"
-psycopg2 = "*"
 python-dotenv = "*"
 fastapi-sqlalchemy = "*"
 databases = {extras = ["postgresql"], version = "*"}
@@ -37,6 +35,7 @@ chembl-structure-pipeline = "*"
 datamol = "*"
 deepchem = "*"
 admet-ai = "*"
+pyjwt = {extras = ["crypto"], version = "*"}
 
 [dev-packages]
 black = "*"

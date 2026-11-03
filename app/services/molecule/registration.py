@@ -1,5 +1,8 @@
 import uuid
 from typing import Tuple
+from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
+from app.db.models.molecule import Molecule
 from app.repositories import molecule as molecule_repo
 from app.repositories import pains as pains_repo
 
@@ -102,7 +105,16 @@ async def register(input_molecule: InputMoleculeDto, db: AsyncSession) -> Tuple[
             )
             standardized_molecule.parent_id = new_parent_molecule.id
 
-        new_molecule = await molecule_repo.create_molecule(db, standardized_molecule)
+        try:
+            new_molecule = await molecule_repo.create_molecule(db, standardized_molecule)
+        except IntegrityError:
+            # A concurrent registration inserted this structure after our check: it stays one molecule,
+            # and this name joins its synonyms, as for any already-registered structure.
+            logger.info(f"Structure registered concurrently, merging name: {input_molecule.name}")
+            existing_molecule = await get_molecule_by_smiles(
+                db, standardized_molecule.smiles_canonical
+            )
+            return await handle_molecule_name(existing_molecule, input_molecule.name, db), False
 
         # Step 4: Check for PAINS and store results
         try:
@@ -142,6 +154,16 @@ async def handle_molecule_name(
     """Handle molecule name and synonyms if the name doesn't match or is not in synonyms."""
     if not input_molecule_name:
         return existing_molecule
+
+    # Lock and reload the row: concurrent registrations adding names to this molecule then take turns
+    # instead of overwriting each other's synonyms. NO KEY UPDATE (what an UPDATE of a non-key column
+    # takes) still lets PAINS/ADMET rows referencing this molecule be inserted meanwhile.
+    await db.execute(
+        select(Molecule)
+        .where(Molecule.id == existing_molecule.id)
+        .with_for_update(key_share=True)
+        .execution_options(populate_existing=True)
+    )
 
     raw_input = input_molecule_name
     input_name_norm = raw_input.strip()

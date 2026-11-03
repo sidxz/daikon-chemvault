@@ -20,6 +20,10 @@ from typing import List, Dict, Any, Tuple
 from sqlalchemy.orm import selectinload
 from sqlalchemy import select, or_, func
 
+# Unique index on molecules.smiles_canonical: one molecule per structure (duplicates from before it are
+# exempt). A violation of it means a concurrent registration inserted the same structure first.
+SMILES_UNIQUE_INDEX = "uq_molecules_smiles_canonical"
+
 
 def generate_filter_conditions(filters: Dict[str, Any]) -> Tuple[str, Dict[str, Any]]:
     """
@@ -399,8 +403,10 @@ async def create_molecule(db: AsyncSession, molecule: MoleculeCreate):
         return db_molecule
 
     except IntegrityError as e:
-        logger.error(f"Duplicate primary key error: {molecule.id} {e}")
         await db.rollback()  # Rollback transaction on error
+        if SMILES_UNIQUE_INDEX in str(e.orig):
+            raise  # registration merges the name into the molecule that won the race
+        logger.error(f"Duplicate primary key error: {molecule.id} {e}")
         raise HTTPException(
             status_code=400, detail="Molecule with this ID already exists."
         )
@@ -631,12 +637,13 @@ async def search_substructure_multiple(
             [f"mol @> :smiles_{i}" for i in range(len(smiles_list))]
         )
 
-        # Base SQL query with substructure conditions
+        # Base SQL query with substructure conditions. Only the OR/AND checked above and bind-parameter
+        # names are interpolated; the SMILES themselves stay bound parameters.
         sql_query = f"""
             SELECT *
             FROM molecules
             WHERE {substructure_conditions}
-        """
+        """  # noqa: S608
 
         # Generate filter conditions and parameters using the helper function
         filter_conditions, filter_params = generate_filter_conditions(filters)

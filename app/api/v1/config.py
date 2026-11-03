@@ -23,7 +23,7 @@ async def get_db():
 async def health():
     return {
         "service": "chemvault-api",
-        "versionName": "rc-2",
+        "versionName": "Belem",
         "timestamp": pd.Timestamp.now().isoformat(),
-        "version": "1.6.0",
+        "version": "1.8.0",
     }
