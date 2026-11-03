@@ -18,3 +18,7 @@ tmp/
 .pytest_cache/
 .vscode/
 .env
+# Local-only material: internal workflow docs and Claude Code files
+internal-docs/
+CLAUDE.md
+.claude/

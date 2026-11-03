@@ -1,0 +1,28 @@
+name: Release
+
+on:
+  push:
+    tags: ["v*.*.*"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# Builds the image and gates it on a Trivy image scan, as daikon-gen3 does. Image findings track the
+# base image as much as the code, so this runs per release tag (and on demand, e.g. on a release
+# branch before tagging), not per push. Accepted findings live in .trivyignore with a reason, nowhere else.
+jobs:
+  image:
+    name: Build & scan image
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - run: docker build -t daikon-chemvault .
+      - uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          scan-type: image
+          image-ref: daikon-chemvault
+          scanners: vuln
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          exit-code: "1"
