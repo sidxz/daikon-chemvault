@@ -1,47 +1,36 @@
-# Use the official Python slim base image
-FROM python:3.12-slim
+# Build stage: pipenv installs the locked dependencies into /project/.venv. Neither pipenv nor pip
+# reaches the runtime image: nothing installs packages at runtime, and both carry vendored copies of
+# urllib3, msgpack and setuptools that image scans flag. Nothing in the lock needs a compiler.
+FROM python:3.12-slim AS build
 
-# Set the working directory
 WORKDIR /project
-
-# Install pipenv and set PIPENV_VENV_IN_PROJECT to create the virtualenv inside the project directory
 ENV PIPENV_VENV_IN_PROJECT=1
 
-# Install build dependencies to compile Python packages
-RUN apt-get update && apt-get install -y \
-    gcc \
-    libpq-dev \
+RUN pip install --no-cache-dir pipenv
+COPY Pipfile Pipfile.lock ./
+# PaDEL-Descriptor (Java, with old guava and log4j jars) comes in through admet_ai's dependencies
+# (astartes, aimsim_core, padelpy); the image has no Java and chemvault never calls it.
+RUN pipenv install --deploy \
+    && .venv/bin/python -m pip uninstall -y pip \
+    && rm -rf .venv/lib/python3.12/site-packages/padelpy/PaDEL-Descriptor
+
+FROM python:3.12-slim
+
+WORKDIR /project
+ENV PATH=/project/.venv/bin:$PATH
+
+# libxrender1/libxext6 for RDKit drawing; postgresql-client for pg_isready and psql in docker-entrypoint.sh
+RUN apt-get update && apt-get install -y --no-install-recommends \
     libexpat1 \
-    libexpat1-dev \
     libxrender1 \
     libxext6 \
     postgresql-client \
     && rm -rf /var/lib/apt/lists/*
 
-# Install pipenv first
-RUN pip install --no-cache-dir pipenv
-
-# Copy Pipfile and Pipfile.lock to leverage Docker cache
-COPY Pipfile Pipfile.lock ./
-
-# Install dependencies without the Pipfile (only from lock file)
-#RUN pipenv install --deploy --ignore-pipfile
-RUN pipenv install --deploy
-
-# Ensure uvicorn is installed
-#RUN pipenv install uvicorn --deploy
-
-# Copy the rest of the application code
+COPY --from=build /project/.venv .venv
 COPY . .
-
-# Expose the port
-EXPOSE 10001
-
-# Run the application
 RUN chmod +x docker-entrypoint.sh
 
+EXPOSE 10001
+
 ENTRYPOINT ["/project/docker-entrypoint.sh"]
-#CMD ["pipenv", "run", "uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "10001"]
-#CMD ["pipenv", "run", "/app/.venv/bin/uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "10001"]
-# Optional: Clean up cached files to reduce image size
-RUN rm -rf /root/.cache

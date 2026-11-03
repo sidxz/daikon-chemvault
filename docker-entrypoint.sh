@@ -1,7 +1,7 @@
 #!/bin/bash
 
 #VERSION
-DAIKON_CHEMVAULT_VERSION="1.8.0"
+DAIKON_CHEMVAULT_VERSION="1.8.1"
 # ANSI color codes for red (error), green (success), yellow (warning), and reset (no color)
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -81,7 +81,7 @@ log "${GREEN}" "RDKit extension is installed or already exists."
 
 # Run Alembic migrations with error handling
 log "" "Running Alembic migrations..."
-if ! pipenv run alembic upgrade head; then
+if ! alembic upgrade head; then
     error_exit "Error: Alembic migration failed."
 fi
 
@@ -90,7 +90,7 @@ log "${GREEN}" "Alembic migrations completed successfully."
 
 # Start the application
 log "" "Starting the application..."
-if ! pipenv run uvicorn app.main:app --host 0.0.0.0 --port 10001 --no-server-header; then
+if ! uvicorn app.main:app --host 0.0.0.0 --port 10001 --no-server-header; then
     error_exit "Error: Failed to start the application with Uvicorn."
 fi
 

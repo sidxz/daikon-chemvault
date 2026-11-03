@@ -25,5 +25,5 @@ async def health():
         "service": "chemvault-api",
         "versionName": "Belem",
         "timestamp": pd.Timestamp.now().isoformat(),
-        "version": "1.8.0",
+        "version": "1.8.1",
     }
