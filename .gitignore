@@ -166,5 +166,14 @@ cython_debug/
 CLAUDE.md
 .claude/
 
-# Internal workflow material (plans, handoffs, reviews): never committed
+# Internal workflow material (plans, handoffs, reviews, AI-agent files): never committed
 internal-docs/
+AGENTS.md
+docs/superpowers/
+.superpowers/
+talks/
+
+# Personal and scratch files
+.vscode/
+scratch/
+*.prev
